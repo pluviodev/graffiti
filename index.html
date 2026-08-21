@@ -2,7 +2,12 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Graffiti">
+<meta name="theme-color" content="#14161a">
 <title>Graffiti Übung</title>
 <style>
   :root{
@@ -12,7 +17,7 @@
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
     font-family:"Segoe UI",system-ui,sans-serif;overflow:hidden;-webkit-user-select:none;user-select:none}
-  #app{display:flex;flex-direction:column;height:100%}
+  #app{display:flex;flex-direction:column;height:100vh;height:100dvh}
 
   /* ---- Toolbar ---- */
   #toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;
@@ -157,6 +162,7 @@
       <button class="act" id="drawMaskBtn">✎ Käfig zeichnen</button>
       <button class="act" id="roundBtn">⬭ Rund: aus</button>
       <button class="act" id="exportMaskBtn">⬇︎ Bereiche exportieren</button>
+      <button class="act" id="fsBtn">⛶ Vollbild</button>
     </div>
   </div>
 
@@ -859,6 +865,23 @@ document.getElementById('roundBtn').addEventListener('click',()=>{
 function syncRoundBtn(){ const b=document.getElementById('roundBtn');
   b.textContent='⬭ Rund: '+(S.maskRound?'an':'aus'); b.classList.toggle('active', S.maskRound); }
 document.getElementById('exportMaskBtn').addEventListener('click', exportMasks);
+// Vollbild (Fullscreen-API; auf iPhone-Safari nicht verfügbar -> dort „Zum Startbildschirm")
+document.getElementById('fsBtn').addEventListener('click',()=>{
+  const d=document, el=d.documentElement;
+  const inFs = d.fullscreenElement || d.webkitFullscreenElement;
+  if(!inFs){
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if(req){ req.call(el); document.body.classList.remove('menu-open'); }
+    else { alert('Vollbild geht auf diesem Browser nicht direkt.\nTipp: über „Zum Startbildschirm hinzufügen" öffnen – dann läuft es randlos.'); }
+  } else {
+    (d.exitFullscreen || d.webkitExitFullscreen || function(){}).call(d);
+  }
+});
+document.addEventListener('fullscreenchange',()=>{
+  const b=document.getElementById('fsBtn');
+  if(b) b.textContent = document.fullscreenElement ? '⛶ Vollbild beenden' : '⛶ Vollbild';
+  fitStage();
+});
 
 addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); }
