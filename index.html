@@ -44,6 +44,63 @@
     border-top:1px solid var(--line);min-height:28px}
   kbd{background:#0006;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11px}
   .sep{width:1px;height:26px;background:var(--line)}
+
+  /* ---- Mobil / Touch ---- */
+  #mobUI{display:none}
+  @media (max-width: 900px){
+    /* Toolbar -> einblendbares ☰-Menü (Vollbild-Wand darunter) */
+    #toolbar{position:fixed;top:0;left:0;right:0;z-index:50;max-height:88vh;overflow-y:auto;
+      gap:8px;padding:12px 12px 16px;align-content:flex-start;
+      transform:translateY(-103%);transition:transform .22s ease;box-shadow:0 12px 40px #000b}
+    body.menu-open #toolbar{transform:none}
+    .grp{padding:5px 9px;gap:7px}
+    .grp>label{font-size:10px}
+    button.tool,select,button.act{padding:11px 13px;font-size:14px;min-height:46px}
+    input[type=range]{width:150px;height:38px}
+    input[type=color]{width:44px;height:40px}
+    .sw{width:30px;height:30px}
+    #stageWrap{padding:0}
+    #status{font-size:11px;padding:5px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #status kbd{display:none}
+
+    #mobUI{display:block}
+    #scrim{position:fixed;inset:0;background:#0007;z-index:45;opacity:0;pointer-events:none;transition:opacity .2s}
+    body.menu-open #scrim{opacity:1;pointer-events:auto}
+
+    .fab{position:fixed;z-index:46;width:62px;height:62px;border-radius:50%;
+      background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+      font-size:26px;display:flex;align-items:center;justify-content:center;
+      box-shadow:0 6px 18px #0009;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent}
+    .fab:active{transform:scale(.94)}
+    #menuFab{top:12px;right:12px;width:52px;height:52px;font-size:22px;z-index:52}
+    #toolFab{bottom:20px;right:18px}
+    #colorFab{bottom:20px;left:18px;border-width:3px;border-color:#fff8}
+    #pressWrap{position:fixed;left:12px;top:50%;transform:translateY(-50%);z-index:44;
+      background:var(--panel2);border:1px solid var(--line);border-radius:22px;padding:10px 7px;
+      display:flex;flex-direction:column;align-items:center;gap:5px;box-shadow:0 6px 18px #0009}
+    #pressWrap label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    #pressM{writing-mode:vertical-lr;direction:rtl;width:36px;height:44vh;max-height:320px;accent-color:var(--accent)}
+    #pressMVal{font-size:11px;color:var(--muted)}
+
+    /* Werkzeug-Rad (halten & ziehen) */
+    #toolWheel{position:fixed;inset:0;z-index:60;display:none;background:#0004}
+    #toolWheel.open{display:block}
+    #toolWheel .seg{position:absolute;width:66px;height:66px;margin:-33px 0 0 -33px;border-radius:50%;
+      background:var(--panel2);border:2px solid var(--line);display:flex;align-items:center;justify-content:center;
+      font-size:28px;box-shadow:0 6px 18px #0009;transition:transform .07s,background .07s,border-color .07s;pointer-events:none}
+    #toolWheel .seg.hot{background:var(--accent);border-color:var(--accent);transform:scale(1.22)}
+    #toolWheel .lbl{position:absolute;transform:translate(-50%,-50%);font-size:11px;color:#fff;
+      text-shadow:0 1px 3px #000;pointer-events:none;white-space:nowrap}
+    #toolWheel .hub{position:absolute;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;
+      background:#000a;border:1px solid var(--line);pointer-events:none}
+
+    /* Farb-Ring */
+    #colorRing{position:fixed;z-index:60;display:none;flex-wrap:wrap;gap:11px;width:206px;padding:13px;
+      background:var(--panel2);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px #000b;
+      bottom:92px;left:18px}
+    #colorRing.open{display:flex}
+    #colorRing .sw{width:34px;height:34px}
+  }
 </style>
 </head>
 <body>
@@ -114,6 +171,17 @@
   <div id="status"></div>
 </div>
 
+<!-- Mobil-Bedienung (nur auf Touch/kleinen Screens sichtbar) -->
+<div id="scrim"></div>
+<div id="mobUI">
+  <button id="menuFab" class="fab" title="Menü / Einstellungen">☰</button>
+  <button id="colorFab" class="fab" title="Farbe"></button>
+  <button id="toolFab" class="fab" title="Werkzeug – halten & ziehen">🎨</button>
+  <div id="pressWrap"><label>Druck</label><input id="pressM" type="range" min="2" max="100" value="55"><span id="pressMVal">55%</span></div>
+  <div id="colorRing"></div>
+  <div id="toolWheel"></div>
+</div>
+
 <script>
 "use strict";
 //==================================================================
@@ -130,6 +198,15 @@ const bgx = bg.getContext('2d');
 const px  = paint.getContext('2d');
 const pvx = preview.getContext('2d');
 
+// Zoom/Pan (nur Anzeige, Zeichen-Koordinaten bleiben korrekt über getBoundingClientRect)
+const view = {scale:1, tx:0, ty:0};
+let baseCenter = {x:0, y:0};
+function applyView(){
+  document.getElementById('stage').style.transform =
+    `translate(${view.tx}px,${view.ty}px) scale(${view.scale})`;
+}
+function resetView(){ view.scale=1; view.tx=0; view.ty=0; applyView(); }
+
 // Bühne auf Bildschirm einpassen (Seitenverhältnis halten)
 function fitStage(){
   const wrap = document.getElementById('stageWrap');
@@ -138,6 +215,9 @@ function fitStage(){
   const scale = Math.min(availW / W, availH / H);
   stage.style.width  = Math.round(W * scale) + 'px';
   stage.style.height = Math.round(H * scale) + 'px';
+  const wr = wrap.getBoundingClientRect();
+  baseCenter = {x: wr.left + wr.width/2, y: wr.top + wr.height/2};
+  applyView();
 }
 addEventListener('resize', fitStage);
 
@@ -467,8 +547,35 @@ function pos(e){
   const r = preview.getBoundingClientRect();
   return { x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height) };
 }
+
+// --- Zwei-Finger: Pinch-Zoom + Verschieben ---
+const activePointers = new Map();
+let gestureActive=false, gLastDist=0, gLastMid=null;
+function twoPts(){ return [...activePointers.values()]; }
+function handlePinch(){
+  const pts=twoPts(); if(pts.length<2) return;
+  const a=pts[0], b=pts[1];
+  const mid={x:(a.x+b.x)/2, y:(a.y+b.y)/2}, d=Math.hypot(a.x-b.x, a.y-b.y);
+  if(gLastMid==null){ gLastMid=mid; gLastDist=d; return; }
+  let factor = d/(gLastDist||d);
+  let ns = clamp(view.scale*factor, 1, 6); factor = ns/view.scale;
+  const C={x:baseCenter.x+view.tx, y:baseCenter.y+view.ty};      // aktueller Bühnen-Mittelpunkt
+  view.tx += (mid.x-C.x)*(1-factor) + (mid.x-gLastMid.x);        // um Pinch-Mitte zoomen + mitziehen
+  view.ty += (mid.y-C.y)*(1-factor) + (mid.y-gLastMid.y);
+  view.scale = ns;
+  if(view.scale<=1.001){ view.scale=1; view.tx=0; view.ty=0; }   // ganz raus -> zentrieren
+  gLastMid=mid; gLastDist=d;
+  applyView();
+}
+
 preview.addEventListener('pointerdown', e=>{
   e.preventDefault(); preview.setPointerCapture(e.pointerId);
+  activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if(activePointers.size>1){                    // zweiter Finger -> Zoom/Pan, evtl. Strich verwerfen
+    gestureActive=true; gLastMid=null;
+    if(S.drawing){ S.drawing=false; sx.clearRect(0,0,W,H); }
+    S.pts=[]; drawPreview(); return;
+  }
   const p=pos(e); S.cur=p; S.last=p; S.stationary=0;
 
   // Eigenen Käfig zeichnen: Punkte setzen, am Startpunkt schließen (snap)
@@ -509,6 +616,8 @@ preview.addEventListener('pointerdown', e=>{
   drawPreview(); updateStatus();
 });
 preview.addEventListener('pointermove', e=>{
+  if(activePointers.has(e.pointerId)) activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if(gestureActive){ if(activePointers.size>=2) handlePinch(); return; }   // Zoom/Pan
   const p=pos(e);
   if(S.drawMask){ S.cur=p; drawPreview(); return; }
   if(S.editMask){
@@ -534,8 +643,10 @@ preview.addEventListener('pointermove', e=>{
   else if(S.tool==='line'||S.tool==='curve') drawPreview();
 });
 function endStroke(e){
+  if(e && activePointers.has(e.pointerId)) activePointers.delete(e.pointerId);
+  if(activePointers.size<2){ gestureActive=false; gLastMid=null; }
   if(maskDrag){ maskDrag=null; saveMask();
-    if(wallTint && !customPhoto) setBackground('photo');   // Färbung an neuen Bereich anpassen
+    if(wallTint && S.mask) setBackground(S.bg);   // Färbung an neuen Bereich anpassen
     drawPreview(); return; }
   if(S.drawing){
     S.drawing=false;
@@ -680,23 +791,28 @@ function exportMasks(){
 //------------------------------------------------------------------
 // UI-Verdrahtung
 //------------------------------------------------------------------
-document.querySelectorAll('button.tool').forEach(b=>{
-  b.addEventListener('click',()=>{
-    document.querySelectorAll('button.tool').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active'); S.tool=b.dataset.tool; S.pts=[]; drawPreview(); updateStatus();
-  });
-});
+function selectTool(name){
+  S.tool=name; S.pts=[];
+  document.querySelectorAll('button.tool').forEach(x=>x.classList.toggle('active', x.dataset.tool===name));
+  updateToolFab(); drawPreview(); updateStatus();
+}
+document.querySelectorAll('button.tool').forEach(b=>{ b.addEventListener('click',()=>selectTool(b.dataset.tool)); });
 capSel.addEventListener('change',()=>{ S.cap=capSel.value; updateStatus(); });
 const pr=document.getElementById('pressure'), prv=document.getElementById('pressureVal');
-pr.addEventListener('input',()=>{ S.pressure=pr.value/100; prv.textContent=pr.value+'%'; });
+pr.addEventListener('input',()=>{ setPressure(pr.value); });
 const colorInp=document.getElementById('color');
-colorInp.addEventListener('input',()=>{ S.color=colorInp.value; markSwatch(); });
+colorInp.addEventListener('input',()=>{ S.color=colorInp.value; markSwatch(); updateColorFab(); });
 
 const PALETTE=['#ff2d55','#ff9500','#ffdd00','#34c759','#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ff2d92','#ffffff','#000000','#8e8e93'];
 const swWrap=document.getElementById('swatches');
 PALETTE.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
-  d.addEventListener('click',()=>{ S.color=c; colorInp.value=c; markSwatch(); }); swWrap.appendChild(d); });
+  d.addEventListener('click',()=>{ S.color=c; colorInp.value=c; markSwatch(); updateColorFab(); }); swWrap.appendChild(d); });
 function markSwatch(){ document.querySelectorAll('.sw').forEach(s=>s.classList.toggle('sel', s.dataset.c.toLowerCase()===S.color.toLowerCase())); }
+// Druck an beiden Reglern (Desktop + Mobil) synchron halten
+function setPressure(v){ S.pressure=v/100;
+  const pr=document.getElementById('pressure'), prv=document.getElementById('pressureVal');
+  const pm=document.getElementById('pressM'), pmv=document.getElementById('pressMVal');
+  if(pr) pr.value=v; if(prv) prv.textContent=v+'%'; if(pm) pm.value=v; if(pmv) pmv.textContent=v+'%'; }
 
 document.getElementById('bgSel').addEventListener('change',e=>{ wallTint=null; setBackground(e.target.value); });
 document.getElementById('wallColor').addEventListener('input',e=>{
@@ -774,10 +890,78 @@ function updateStatus(){
 }
 
 //------------------------------------------------------------------
+// Mobil-Bedienung: Werkzeug-Rad (halten & ziehen), Farb-Ring, ☰-Menü
+//------------------------------------------------------------------
+const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',smudge:'👆',eraser:'🧽'};
+const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',smudge:'Verwischen',eraser:'Radierer'};
+function updateToolFab(){ const f=document.getElementById('toolFab'); if(f) f.textContent=TOOL_EMOJI[S.tool]||'🎨'; }
+function updateColorFab(){ const f=document.getElementById('colorFab'); if(f) f.style.background=S.color; }
+
+(function initMobUI(){
+  const toolFab=document.getElementById('toolFab');
+  const toolWheel=document.getElementById('toolWheel');
+  const colorFab=document.getElementById('colorFab');
+  const colorRing=document.getElementById('colorRing');
+  const menuFab=document.getElementById('menuFab');
+  const scrim=document.getElementById('scrim');
+  const pressM=document.getElementById('pressM');
+
+  // --- Werkzeug-Rad ---
+  const TOOLS=Object.keys(TOOL_EMOJI);
+  let segs=[], hot=-1, anchor=null;
+  function openWheel(x,y){
+    anchor={x,y}; hot=-1; toolWheel.innerHTML='';
+    const hub=document.createElement('div'); hub.className='hub'; hub.style.left=x+'px'; hub.style.top=y+'px'; toolWheel.appendChild(hub);
+    const R=140, N=TOOLS.length;
+    segs=TOOLS.map((t,i)=>{
+      const th=(i/(N-1))*(100*Math.PI/180);          // Fächer 0..100° nach oben/links
+      const sx=x - R*Math.sin(th), sy=y - R*Math.cos(th);
+      const el=document.createElement('div'); el.className='seg'; el.textContent=TOOL_EMOJI[t];
+      el.style.left=sx+'px'; el.style.top=sy+'px'; toolWheel.appendChild(el);
+      const lb=document.createElement('div'); lb.className='lbl'; lb.textContent=TOOL_LABEL[t];
+      lb.style.left=sx+'px'; lb.style.top=(sy-42)+'px'; toolWheel.appendChild(lb);
+      return {t,x:sx,y:sy,el};
+    });
+    toolWheel.classList.add('open');
+  }
+  function moveWheel(x,y){
+    if(!anchor) return;
+    let best=-1, bd=1e9;
+    if(Math.hypot(x-anchor.x,y-anchor.y)>42){        // Deadzone -> sonst keine Auswahl
+      segs.forEach((s,i)=>{ const d=Math.hypot(x-s.x,y-s.y); if(d<bd){bd=d;best=i;} });
+    }
+    if(best!==hot){ segs.forEach((s,i)=>s.el.classList.toggle('hot', i===best)); hot=best; }
+  }
+  function closeWheel(pick){
+    toolWheel.classList.remove('open');
+    if(pick && hot>=0) selectTool(segs[hot].t);
+    anchor=null; segs=[]; hot=-1;
+  }
+  toolFab.addEventListener('pointerdown',e=>{ e.preventDefault(); toolFab.setPointerCapture(e.pointerId);
+    const r=toolFab.getBoundingClientRect(); openWheel(r.left+r.width/2, r.top+r.height/2); });
+  toolFab.addEventListener('pointermove',e=>{ if(anchor){ e.preventDefault(); moveWheel(e.clientX,e.clientY); } });
+  toolFab.addEventListener('pointerup',e=>{ if(anchor){ e.preventDefault(); closeWheel(true); } });
+  toolFab.addEventListener('pointercancel',()=>{ if(anchor) closeWheel(false); });
+
+  // --- Farb-Ring ---
+  PALETTE.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
+    d.addEventListener('click',()=>{ S.color=c; document.getElementById('color').value=c; markSwatch(); updateColorFab(); colorRing.classList.remove('open'); });
+    colorRing.appendChild(d); });
+  colorFab.addEventListener('click',()=>colorRing.classList.toggle('open'));
+
+  // --- ☰-Menü (blendet die bestehende Toolbar ein) ---
+  menuFab.addEventListener('click',()=>document.body.classList.toggle('menu-open'));
+  scrim.addEventListener('click',()=>{ document.body.classList.remove('menu-open'); colorRing.classList.remove('open'); });
+
+  // --- Druck-Slider am Rand ---
+  pressM.addEventListener('input',()=>setPressure(pressM.value));
+})();
+
+//------------------------------------------------------------------
 // Start
 //------------------------------------------------------------------
 function boot(){
-  fitStage(); markSwatch(); updateStatus();
+  fitStage(); markSwatch(); updateStatus(); updateToolFab(); updateColorFab();
   buildBgOptions();
   loadBgImages(()=>{ setBackground('photo'); });
   requestAnimationFrame(loop);
