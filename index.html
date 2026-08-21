@@ -80,12 +80,13 @@
     #menuFab{top:12px;right:12px;width:52px;height:52px;font-size:22px;z-index:52}
     #toolFab{bottom:20px;right:18px}
     #colorFab{bottom:20px;left:18px;border-width:3px;border-color:#fff8}
-    #pressWrap{position:fixed;left:12px;top:50%;transform:translateY(-50%);z-index:44;
-      background:var(--panel2);border:1px solid var(--line);border-radius:22px;padding:10px 7px;
-      display:flex;flex-direction:column;align-items:center;gap:5px;box-shadow:0 6px 18px #0009}
+    #pressWrap{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:44;
+      max-width:calc(100vw - 176px);box-sizing:border-box;
+      background:var(--panel2);border:1px solid var(--line);border-radius:22px;padding:7px 14px;
+      display:flex;flex-direction:row;align-items:center;gap:9px;box-shadow:0 6px 18px #0009}
     #pressWrap label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-    #pressM{writing-mode:vertical-lr;direction:rtl;width:36px;height:44vh;max-height:320px;accent-color:var(--accent)}
-    #pressMVal{font-size:11px;color:var(--muted)}
+    #pressM{flex:1;min-width:70px;height:34px;accent-color:var(--accent)}
+    #pressMVal{font-size:11px;color:var(--muted);min-width:30px;text-align:right}
 
     /* Werkzeug-Rad (halten & ziehen) */
     #toolWheel{position:fixed;inset:0;z-index:60;display:none;background:#0004}
@@ -94,6 +95,7 @@
       background:var(--panel2);border:2px solid var(--line);display:flex;align-items:center;justify-content:center;
       font-size:28px;box-shadow:0 6px 18px #0009;transition:transform .07s,background .07s,border-color .07s;pointer-events:none}
     #toolWheel .seg.hot{background:var(--accent);border-color:var(--accent);transform:scale(1.22)}
+    #toolWheel.tap .seg{pointer-events:auto;cursor:pointer}
     #toolWheel .lbl{position:absolute;transform:translate(-50%,-50%);font-size:11px;color:#fff;
       text-shadow:0 1px 3px #000;pointer-events:none;white-space:nowrap}
     #toolWheel .hub{position:absolute;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;
@@ -929,26 +931,44 @@ function updateColorFab(){ const f=document.getElementById('colorFab'); if(f) f.
   const scrim=document.getElementById('scrim');
   const pressM=document.getElementById('pressM');
 
-  // --- Werkzeug-Rad ---
-  const TOOLS=Object.keys(TOOL_EMOJI);
-  let segs=[], hot=-1, anchor=null;
-  function openWheel(x,y){
-    anchor={x,y}; hot=-1; toolWheel.innerHTML='';
+  // --- Werkzeug-Rad (+ Cap-Unterrad) ---
+  const CAP_KEYS=Object.keys(CAPS);
+  let segs=[], hot=-1, anchor=null, wheelMode='drag';
+
+  function setCap(k){ S.cap=k; const cs=document.getElementById('cap'); if(cs) cs.value=k; updateStatus(); drawPreview(); }
+
+  // Hauptrad: Werkzeuge + Zurück/Vor + Cap (öffnet ein zweites Rad)
+  function mainItems(){
+    const items=Object.keys(TOOL_EMOJI).map(t=>({emoji:TOOL_EMOJI[t], label:TOOL_LABEL[t], act:()=>selectTool(t)}));
+    items.push({emoji:'↶', label:'Zurück', act:()=>undo()});
+    items.push({emoji:'↷', label:'Vor',    act:()=>redo()});
+    items.push({emoji:'🧢', label:'Cap',    sub:true, act:openCapWheel});
+    return items;
+  }
+  function capItems(){ return CAP_KEYS.map(k=>({emoji:'🧢', label:CAPS[k].label, act:()=>setCap(k)})); }
+
+  // zeichnet ein Rad (Fächer 0..90° nach oben/links, bleibt immer über dem Button)
+  function layout(items,x,y){
+    hot=-1; toolWheel.innerHTML='';
     const hub=document.createElement('div'); hub.className='hub'; hub.style.left=x+'px'; hub.style.top=y+'px'; toolWheel.appendChild(hub);
-    const R=140, N=TOOLS.length;
-    segs=TOOLS.map((t,i)=>{
-      const th=(i/(N-1))*(100*Math.PI/180);          // Fächer 0..100° nach oben/links
-      const sx=x - R*Math.sin(th), sy=y - R*Math.cos(th);
-      const el=document.createElement('div'); el.className='seg'; el.textContent=TOOL_EMOJI[t];
+    const N=items.length, span=Math.PI/2, gap=N>1?span/(N-1):0;
+    const R=Math.max(140, Math.min(255, gap?56/gap:140));   // Radius wächst mit Anzahl, damit sich nichts stapelt
+    segs=items.map((it,i)=>{
+      const th=gap*i, sx=x-R*Math.sin(th), sy=y-R*Math.cos(th);
+      const el=document.createElement('div'); el.className='seg'; el.textContent=it.emoji;
       el.style.left=sx+'px'; el.style.top=sy+'px'; toolWheel.appendChild(el);
-      const lb=document.createElement('div'); lb.className='lbl'; lb.textContent=TOOL_LABEL[t];
+      const lb=document.createElement('div'); lb.className='lbl'; lb.textContent=it.label;
       lb.style.left=sx+'px'; lb.style.top=(sy-42)+'px'; toolWheel.appendChild(lb);
-      return {t,x:sx,y:sy,el};
+      return {...it, x:sx, y:sy, el};
     });
     toolWheel.classList.add('open');
   }
+  function closeAll(){ toolWheel.classList.remove('open','tap'); anchor=null; segs=[]; hot=-1; wheelMode='drag'; }
+
+  // Hauptrad (halten & ziehen)
+  function openWheel(x,y){ anchor={x,y}; wheelMode='drag'; toolWheel.classList.remove('tap'); layout(mainItems(),x,y); }
   function moveWheel(x,y){
-    if(!anchor) return;
+    if(!anchor||wheelMode!=='drag') return;
     let best=-1, bd=1e9;
     if(Math.hypot(x-anchor.x,y-anchor.y)>42){        // Deadzone -> sonst keine Auswahl
       segs.forEach((s,i)=>{ const d=Math.hypot(x-s.x,y-s.y); if(d<bd){bd=d;best=i;} });
@@ -956,15 +976,32 @@ function updateColorFab(){ const f=document.getElementById('colorFab'); if(f) f.
     if(best!==hot){ segs.forEach((s,i)=>s.el.classList.toggle('hot', i===best)); hot=best; }
   }
   function closeWheel(pick){
-    toolWheel.classList.remove('open');
-    if(pick && hot>=0) selectTool(segs[hot].t);
-    anchor=null; segs=[]; hot=-1;
+    if(wheelMode!=='drag') return;
+    const chosen=(pick && hot>=0) ? segs[hot] : null;
+    if(chosen && chosen.sub){ chosen.act(); return; }   // Cap -> zweites Rad offen lassen
+    toolWheel.classList.remove('open'); anchor=null; segs=[]; hot=-1;
+    if(chosen) chosen.act();
   }
+
+  // Cap-Unterrad (antippen)
+  function openCapWheel(){
+    wheelMode='tap'; toolWheel.classList.add('tap');
+    const a=anchor||{x:innerWidth-49, y:innerHeight-51};
+    layout(capItems(), a.x, a.y);
+    segs.forEach(s=>{ if(s.label===CAPS[S.cap].label) s.el.classList.add('hot'); });
+  }
+  toolWheel.addEventListener('click',e=>{
+    if(wheelMode!=='tap') return;
+    const hit=segs.find(s=>s.el===e.target);
+    if(hit) hit.act();
+    closeAll();
+  });
+
   toolFab.addEventListener('pointerdown',e=>{ e.preventDefault(); toolFab.setPointerCapture(e.pointerId);
     const r=toolFab.getBoundingClientRect(); openWheel(r.left+r.width/2, r.top+r.height/2); });
-  toolFab.addEventListener('pointermove',e=>{ if(anchor){ e.preventDefault(); moveWheel(e.clientX,e.clientY); } });
-  toolFab.addEventListener('pointerup',e=>{ if(anchor){ e.preventDefault(); closeWheel(true); } });
-  toolFab.addEventListener('pointercancel',()=>{ if(anchor) closeWheel(false); });
+  toolFab.addEventListener('pointermove',e=>{ if(anchor&&wheelMode==='drag'){ e.preventDefault(); moveWheel(e.clientX,e.clientY); } });
+  toolFab.addEventListener('pointerup',e=>{ if(anchor&&wheelMode==='drag'){ e.preventDefault(); closeWheel(true); } });
+  toolFab.addEventListener('pointercancel',()=>{ if(anchor&&wheelMode==='drag') closeWheel(false); });
 
   // --- Farb-Ring ---
   PALETTE.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
