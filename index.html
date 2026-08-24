@@ -36,6 +36,14 @@
   .swatches{display:flex;gap:4px}
   .sw{width:22px;height:22px;border-radius:6px;border:2px solid #0006;cursor:pointer}
   .sw.sel{outline:2px solid var(--accent);outline-offset:1px}
+  .grp>label.dl{text-transform:none;letter-spacing:0;color:var(--txt)}
+  #dagGrp input[type=range]{width:88px}
+  #angleDial{position:relative;width:46px;height:46px;border-radius:50%;background:#2f3540;
+    border:1px solid var(--line);cursor:pointer;touch-action:none;flex:0 0 auto}
+  #angleDial::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;
+    margin:-2px 0 0 -2px;border-radius:50%;background:var(--muted)}
+  #dialHandle{position:absolute;width:11px;height:11px;margin:-6px 0 0 -6px;border-radius:50%;
+    background:var(--accent);pointer-events:none}
 
   /* ---- Stage ---- */
   #stageWrap{flex:1;display:flex;align-items:center;justify-content:center;
@@ -118,6 +126,7 @@
       <button class="tool active" data-tool="spray">🎨 Sprühen</button>
       <button class="tool" data-tool="line">📏 Linie</button>
       <button class="tool" data-tool="curve">〰️ Kurve</button>
+      <button class="tool" data-tool="dagger">🗡️ Dagger</button>
       <button class="tool" data-tool="smudge">👆 Verwischen</button>
       <button class="tool" data-tool="eraser">🧽 Radierer</button>
     </div>
@@ -125,6 +134,15 @@
     <div class="grp">
       <label>Cap</label>
       <select id="cap"></select>
+    </div>
+
+    <div class="grp" id="dagGrp" style="display:none">
+      <label>Dagger</label>
+      <button class="act" id="dagMode">Modus: Freihand</button>
+      <label class="dl">Länge</label><input type="range" id="coneLen" min="20" max="320" value="120">
+      <label class="dl">Breite</label><input type="range" id="coneWide" min="4" max="55" value="22">
+      <label class="dl">Härte</label><input type="range" id="coneHard" min="0" max="100" value="45">
+      <div id="angleDial" title="Nebel-Richtung"><div id="dialHandle"></div></div>
     </div>
 
     <div class="grp">
@@ -257,6 +275,12 @@ const S = {
   color:'#ff2d55',
   pressure:0.55,
   cap:'fat',
+  // Dagger (schräge Dose): Modus + Cone-Parameter
+  dagMode:'free',        // 'free' = Freihand (feste Rad-Richtung), 'curve' = gebogene Bahn
+  coneLen:120,           // Reichweite des Nebels (px)
+  coneWide:22,           // Öffnungs-/Halbwinkel des Fächers (Grad)
+  coneHard:0.45,         // 0 = weich/neblig .. 1 = harte Spitze, steiler Abfall
+  coneAngle:90,          // Freihand: absolute Nebelrichtung (Grad); Kurve: Kipp gegenüber Bahn
   drawing:false,
   cur:{x:0,y:0}, last:{x:0,y:0},
   lastSpray:{x:0,y:0},    // letzter gesprühter Punkt (für lückenlose Striche)
@@ -484,6 +508,57 @@ function commitCurve(a,c,b){ pushUndo();
   sx.clearRect(0,0,W,H); bufPath(bez); commitFullStroke();
 }
 
+//------------------------------------------------------------------
+// Dagger – Dose schräg gehalten: harte Spitze + auffächernder Nebel-Cone
+//   Kern folgt der Bahn (dünne, deckende Linie), der Cone driftet in
+//   Richtung `dir` und wird zum Ende hin breiter, weicher und dünner.
+//------------------------------------------------------------------
+function coneSpeckle(x,y,dir){
+  const cap=CAPS[S.cap], p=S.pressure, hard=S.coneHard;
+  const L=S.coneLen, half=S.coneWide*Math.PI/180;
+  const base=cap.radius*(0.22+p*0.35);                 // Breite direkt an der Spitze
+  const dx=Math.cos(dir), dy=Math.sin(dir), nx=-dy, ny=dx;
+  const maxW=base+Math.tan(half)*L;                    // Halbbreite am Cone-Ende
+  const N=Math.round((6+L*0.32)*(0.5+p)*cap.density*(0.7+(1-hard)*0.9));
+  for(let i=0;i<N;i++){
+    const s=Math.pow(Math.random(), 0.6+hard*1.9);     // 0=Spitze .. 1=Ende; hart => dicht an der Spitze
+    const w=base+(maxW-base)*s;
+    const u=((Math.random()+Math.random()+Math.random())/3*2-1)*w;   // weicher (gauß-artiger) Querversatz
+    const along=(Math.random()-0.5)*base*0.6;
+    const edge=Math.abs(u)/(w+1e-3);
+    const a=clamp((0.26+0.5*p)*(1-s*(0.5+0.42*hard))*(1-edge*0.6), 0, 1);  // dünnt nach hinten + zum Rand aus
+    const dotR=(0.4+Math.random()*0.7)*(1+(1-hard)*1.3)*(0.8+s*0.7);       // weich = größere, nebligere Körner
+    sx.fillStyle=rgba(S.color,a);
+    sx.beginPath(); sx.arc(x+dx*(L*s+along)+nx*u, y+dy*(L*s+along)+ny*u, dotR, 0, TAU); sx.fill();
+  }
+}
+function daggerCore(x,y){                               // harter Kern-Punkt (die Spitze)
+  const cap=CAPS[S.cap], r=Math.max(1.2, cap.radius*(0.16+S.pressure*0.34));
+  sx.fillStyle=rgba(S.color,1); sx.beginPath(); sx.arc(x,y,r,0,TAU); sx.fill();
+}
+function daggerDab(pt,dir){ daggerCore(pt.x,pt.y); coneSpeckle(pt.x,pt.y,dir); }
+function daggerPath(getPoint,len,dirFn){               // durchgehende Kernlinie + Cone entlang der Bahn
+  const cap=CAPS[S.cap], cr=Math.max(1.2, cap.radius*(0.16+S.pressure*0.34));
+  sx.strokeStyle=rgba(S.color,1); sx.lineWidth=cr*2; sx.lineCap='round'; sx.lineJoin='round';
+  const p0=getPoint(0); sx.beginPath(); sx.moveTo(p0.x,p0.y);
+  const NC=Math.max(1, Math.round(len/Math.max(1.5,cap.radius*0.3)));
+  for(let i=1;i<=NC;i++){ const q=getPoint(i/NC); sx.lineTo(q.x,q.y); } sx.stroke();
+  const NS=Math.max(1, Math.round(len/Math.max(3,cap.radius*0.55)));
+  for(let i=0;i<=NS;i++){ const t=i/NS, q=getPoint(t); coneSpeckle(q.x,q.y,dirFn(t)); }
+}
+function daggerSeg(a,b){                                // Freihand: feste Rad-Richtung
+  const dir=S.coneAngle*Math.PI/180, len=Math.hypot(b.x-a.x,b.y-a.y);
+  daggerPath(t=>({x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t}), len, ()=>dir);
+}
+function commitDagger(a,c,b){ pushUndo();               // Kurve: Cone folgt der Tangente (Rad = Kipp)
+  const bez=t=>{ const u=1-t; return { x:u*u*a.x+2*u*t*c.x+t*t*b.x, y:u*u*a.y+2*u*t*c.y+t*t*b.y }; };
+  let prev=bez(0), len=0; for(let t=0.04;t<=1;t+=0.04){ const q=bez(t); len+=dist(prev,q); prev=q; }
+  const off=(S.coneAngle-90)*Math.PI/180;
+  const tang=t=>{ const tx=2*(1-t)*(c.x-a.x)+2*t*(b.x-c.x), ty=2*(1-t)*(c.y-a.y)+2*t*(b.y-c.y);
+                  return Math.atan2(ty,tx)+Math.PI+off; };   // Nebel hinter der Fahrtrichtung, um `off` gekippt
+  sx.clearRect(0,0,W,H); daggerPath(bez,len,tang); commitFullStroke();
+}
+
 // Vorschau (Rubber-Band)
 function drawPreview(){
   pvx.clearRect(0,0,W,H);
@@ -491,11 +566,13 @@ function drawPreview(){
     pvx.save(); pvx.setLineDash([10,8]); pvx.lineWidth=2; pvx.strokeStyle=rgba('#00e08a',0.9);
     pvx.beginPath(); maskPath(pvx); pvx.closePath(); pvx.stroke(); pvx.restore();
   }
-  if((S.tool==='line'||S.tool==='curve') && S.pts.length){
+  const isLineish=S.tool==='line';
+  const isCurveish=S.tool==='curve' || (S.tool==='dagger' && S.dagMode==='curve');
+  if((isLineish||isCurveish) && S.pts.length){
     pvx.save(); pvx.strokeStyle=rgba(S.color,0.9); pvx.lineWidth=2; pvx.setLineDash([6,6]);
     pvx.beginPath();
     const a=S.pts[0];
-    if(S.tool==='line'){ pvx.moveTo(a.x,a.y); pvx.lineTo(S.cur.x,S.cur.y); }
+    if(isLineish){ pvx.moveTo(a.x,a.y); pvx.lineTo(S.cur.x,S.cur.y); }
     else {
       if(S.pts.length===1){ pvx.moveTo(a.x,a.y); pvx.lineTo(S.cur.x,S.cur.y); }
       else { const b=S.pts[1], c=S.cur; pvx.moveTo(a.x,a.y); pvx.quadraticCurveTo(c.x,c.y,b.x,b.y); }
@@ -620,6 +697,14 @@ preview.addEventListener('pointerdown', e=>{
   } else if(S.tool==='curve'){
     if(S.pts.length<2){ S.pts.push(p); }
     else { commitCurve(S.pts[0],p,S.pts[1]); S.pts=[]; }
+  } else if(S.tool==='dagger'){
+    if(S.dagMode==='free'){
+      pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y};
+      sx.clearRect(0,0,W,H); daggerDab(p, S.coneAngle*Math.PI/180); renderFullPreview();
+    } else {
+      if(S.pts.length<2){ S.pts.push(p); }
+      else { commitDagger(S.pts[0],p,S.pts[1]); S.pts=[]; }
+    }
   }
   drawPreview(); updateStatus();
 });
@@ -644,6 +729,10 @@ preview.addEventListener('pointermove', e=>{
       bufSeg(S.lastSpray,p); renderFullPreview();
       S.lastSpray={x:p.x,y:p.y};
     }
+    else if(S.tool==='dagger' && S.dagMode==='free'){
+      daggerSeg(S.lastSpray,p); renderFullPreview();
+      S.lastSpray={x:p.x,y:p.y};
+    }
   }
   if(dist(p,S.last)<2.2) S.stationary++; else S.stationary=0;
   S.last=S.cur; S.cur=p;
@@ -658,7 +747,7 @@ function endStroke(e){
     drawPreview(); return; }
   if(S.drawing){
     S.drawing=false;
-    if(S.tool==='spray') commitFullStroke();
+    if(S.tool==='spray' || (S.tool==='dagger' && S.dagMode==='free')) commitFullStroke();
   }
 }
 preview.addEventListener('pointerup', endStroke);
@@ -675,6 +764,9 @@ function loop(){
       bufDab(S.cur.x,S.cur.y); renderFullPreview();  // Aufbau/Verdichten beim Halten
     } else S.stationary=0;
     maybeSpawnDrip(S.cur.x,S.cur.y);
+  }
+  if(S.drawing && S.tool==='dagger' && S.dagMode==='free' && dist(S.cur,S.lastSpray)<2.2){
+    daggerDab(S.cur, S.coneAngle*Math.PI/180); renderFullPreview();   // Nebel verdichtet beim Halten
   }
   updateDrips();
   requestAnimationFrame(loop);
@@ -802,6 +894,7 @@ function exportMasks(){
 function selectTool(name){
   S.tool=name; S.pts=[];
   document.querySelectorAll('button.tool').forEach(x=>x.classList.toggle('active', x.dataset.tool===name));
+  const dg=document.getElementById('dagGrp'); if(dg) dg.style.display=(name==='dagger'?'':'none');
   updateToolFab(); drawPreview(); updateStatus();
 }
 document.querySelectorAll('button.tool').forEach(b=>{ b.addEventListener('click',()=>selectTool(b.dataset.tool)); });
@@ -816,6 +909,28 @@ const swWrap=document.getElementById('swatches');
 PALETTE.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
   d.addEventListener('click',()=>{ S.color=c; colorInp.value=c; markSwatch(); updateColorFab(); }); swWrap.appendChild(d); });
 function markSwatch(){ document.querySelectorAll('.sw').forEach(s=>s.classList.toggle('sel', s.dataset.c.toLowerCase()===S.color.toLowerCase())); }
+
+// --- Dagger-Regler + Winkel-Rad ---
+const dagModeBtn=document.getElementById('dagMode');
+dagModeBtn.addEventListener('click',()=>{ S.dagMode=(S.dagMode==='free'?'curve':'free'); S.pts=[];
+  dagModeBtn.textContent='Modus: '+(S.dagMode==='free'?'Freihand':'Kurve');
+  updateStatus(); drawPreview(); });
+document.getElementById('coneLen').addEventListener('input',e=>{ S.coneLen=+e.target.value; });
+document.getElementById('coneWide').addEventListener('input',e=>{ S.coneWide=+e.target.value; });
+document.getElementById('coneHard').addEventListener('input',e=>{ S.coneHard=e.target.value/100; });
+const angleDial=document.getElementById('angleDial'), dialHandle=document.getElementById('dialHandle');
+function syncDial(){ const a=S.coneAngle*Math.PI/180, R=15;
+  dialHandle.style.left=(23+Math.cos(a)*R)+'px'; dialHandle.style.top=(23+Math.sin(a)*R)+'px';
+  angleDial.title='Nebel-Richtung '+Math.round(S.coneAngle)+'°'; }
+function dialFrom(e){ const r=angleDial.getBoundingClientRect();
+  const a=Math.atan2(e.clientY-(r.top+r.height/2), e.clientX-(r.left+r.width/2));
+  S.coneAngle=(a*180/Math.PI+360)%360; syncDial(); }
+let dialDrag=false;
+angleDial.addEventListener('pointerdown',e=>{ e.preventDefault(); dialDrag=true; angleDial.setPointerCapture(e.pointerId); dialFrom(e); });
+angleDial.addEventListener('pointermove',e=>{ if(dialDrag) dialFrom(e); });
+angleDial.addEventListener('pointerup',()=>{ dialDrag=false; });
+angleDial.addEventListener('pointercancel',()=>{ dialDrag=false; });
+syncDial();
 // Druck an beiden Reglern (Desktop + Mobil) synchron halten
 function setPressure(v){ S.pressure=v/100;
   const pr=document.getElementById('pressure'), prv=document.getElementById('pressureVal');
@@ -896,6 +1011,9 @@ function updateStatus(){
     spray:'Gedrückt halten & ziehen · Druck regelt stufenlos Nebel → fast solide Linie',
     line:'Klick = Startpunkt, zweiter Klick = Linie',
     curve:'Klick Start · Klick Ende · Klick für Biegung',
+    dagger: S.dagMode==='free'
+      ? 'Freihand: ziehen · Nebel driftet in Rad-Richtung · Länge/Breite/Härte regeln den Cone'
+      : 'Kurve: Klick Start · Klick Ende · Klick für Biegung · Cone folgt der Bahn (Rad = Kipp)',
     smudge:'Ziehen zum Verwischen nasser Farbe',
     eraser:'Ziehen zum Wegradieren',
   };
@@ -917,8 +1035,8 @@ function updateStatus(){
 //------------------------------------------------------------------
 // Mobil-Bedienung: Werkzeug-Rad (halten & ziehen), Farb-Ring, ☰-Menü
 //------------------------------------------------------------------
-const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',smudge:'👆',eraser:'🧽'};
-const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',smudge:'Verwischen',eraser:'Radierer'};
+const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',dagger:'🗡️',smudge:'👆',eraser:'🧽'};
+const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',dagger:'Dagger',smudge:'Verwischen',eraser:'Radierer'};
 function updateToolFab(){ const f=document.getElementById('toolFab'); if(f) f.textContent=TOOL_EMOJI[S.tool]||'🎨'; }
 function updateColorFab(){ const f=document.getElementById('colorFab'); if(f) f.style.background=S.color; }
 
