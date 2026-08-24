@@ -553,9 +553,8 @@ function daggerSeg(a,b){                                // Freihand: feste Rad-R
 function commitDagger(a,c,b){ pushUndo();               // Kurve: Cone folgt der Tangente (Rad = Kipp)
   const bez=t=>{ const u=1-t; return { x:u*u*a.x+2*u*t*c.x+t*t*b.x, y:u*u*a.y+2*u*t*c.y+t*t*b.y }; };
   let prev=bez(0), len=0; for(let t=0.04;t<=1;t+=0.04){ const q=bez(t); len+=dist(prev,q); prev=q; }
-  const off=(S.coneAngle-90)*Math.PI/180;
   const tang=t=>{ const tx=2*(1-t)*(c.x-a.x)+2*t*(b.x-c.x), ty=2*(1-t)*(c.y-a.y)+2*t*(b.y-c.y);
-                  return Math.atan2(ty,tx)+Math.PI+off; };   // Nebel hinter der Fahrtrichtung, um `off` gekippt
+                  return Math.atan2(ty,tx)+Math.PI; };   // rein tangential: Nebel laeuft hinter der Spitze her, rotiert mit der Bahn
   sx.clearRect(0,0,W,H); daggerPath(bez,len,tang); commitFullStroke();
 }
 
@@ -1013,7 +1012,7 @@ function updateStatus(){
     curve:'Klick Start · Klick Ende · Klick für Biegung',
     dagger: S.dagMode==='free'
       ? 'Freihand: ziehen · Nebel driftet in Rad-Richtung · Länge/Breite/Härte regeln den Cone'
-      : 'Kurve: Klick Start · Klick Ende · Klick für Biegung · Cone folgt der Bahn (Rad = Kipp)',
+      : 'Kurve: Klick Start · Klick Ende · Klick für Biegung · Cone läuft automatisch tangential mit (Rad egal)',
     smudge:'Ziehen zum Verwischen nasser Farbe',
     eraser:'Ziehen zum Wegradieren',
   };
