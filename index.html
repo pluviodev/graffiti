@@ -539,13 +539,14 @@ function daggerCore(x,y){                               // harter Kern-Punkt (di
   sx.fillStyle=rgba(S.color,1); sx.beginPath(); sx.arc(x,y,r,0,TAU); sx.fill();
 }
 function daggerDab(pt,dir){ daggerCore(pt.x,pt.y); coneSpeckle(pt.x,pt.y,dir); }
-function daggerPath(getPoint,len,dirFn){               // durchgehende Kernlinie + Cone entlang der Bahn
+function daggerPath(getPoint,len,dirFn,dens){          // durchgehende Kernlinie + Cone entlang der Bahn
+  dens=dens||1;                                        // Deposit-Dichte (Kurve höher, damit sie so satt wie Freihand wird)
   const cap=CAPS[S.cap], cr=Math.max(1.2, cap.radius*(0.16+S.pressure*0.34));
   sx.strokeStyle=rgba(S.color,1); sx.lineWidth=cr*2; sx.lineCap='round'; sx.lineJoin='round';
   const p0=getPoint(0); sx.beginPath(); sx.moveTo(p0.x,p0.y);
   const NC=Math.max(1, Math.round(len/Math.max(1.5,cap.radius*0.3)));
   for(let i=1;i<=NC;i++){ const q=getPoint(i/NC); sx.lineTo(q.x,q.y); } sx.stroke();
-  const NS=Math.max(1, Math.round(len/Math.max(3,cap.radius*0.55)));
+  const NS=Math.max(1, Math.round(dens*len/Math.max(3,cap.radius*0.55)));
   for(let i=0;i<=NS;i++){ const t=i/NS, q=getPoint(t); coneSpeckle(q.x,q.y,dirFn(t)); }
 }
 function daggerSeg(a,b){                                // Freihand: feste Rad-Richtung
@@ -559,7 +560,7 @@ function commitDagger(a,c,b){ pushUndo();               // Kurve: Cone folgt der
   // per S.coneSide waehlbar; die Normale dreht mit der Tangente, damit der Faecher dem Bogen folgt.
   const norm=t=>{ const tx=2*(1-t)*(c.x-a.x)+2*t*(b.x-c.x), ty=2*(1-t)*(c.y-a.y)+2*t*(b.y-c.y);
                   return Math.atan2(ty,tx)+S.coneSide*Math.PI/2; };
-  sx.clearRect(0,0,W,H); daggerPath(bez,len,norm); commitFullStroke();
+  sx.clearRect(0,0,W,H); daggerPath(bez,len,norm,5); commitFullStroke();   // dichter stempeln = so satt wie Freihand
 }
 
 // Vorschau (Rubber-Band)
