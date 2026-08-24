@@ -139,6 +139,7 @@
     <div class="grp" id="dagGrp" style="display:none">
       <label>Dagger</label>
       <button class="act" id="dagMode">Modus: Freihand</button>
+      <button class="act" id="dagSide" title="Kurve: Nebel-Seite">Seite: Links</button>
       <label class="dl">Länge</label><input type="range" id="coneLen" min="20" max="320" value="120">
       <label class="dl">Breite</label><input type="range" id="coneWide" min="4" max="55" value="22">
       <label class="dl">Härte</label><input type="range" id="coneHard" min="0" max="100" value="45">
@@ -280,7 +281,8 @@ const S = {
   coneLen:120,           // Reichweite des Nebels (px)
   coneWide:22,           // Öffnungs-/Halbwinkel des Fächers (Grad)
   coneHard:0.45,         // 0 = weich/neblig .. 1 = harte Spitze, steiler Abfall
-  coneAngle:90,          // Freihand: absolute Nebelrichtung (Grad); Kurve: Kipp gegenüber Bahn
+  coneAngle:90,          // Freihand: absolute Nebelrichtung (Grad)
+  coneSide:-1,           // Kurve: Nebel-Seite senkrecht zur Bahn (-1 = links / +1 = rechts der Fahrtrichtung)
   drawing:false,
   cur:{x:0,y:0}, last:{x:0,y:0},
   lastSpray:{x:0,y:0},    // letzter gesprühter Punkt (für lückenlose Striche)
@@ -553,9 +555,11 @@ function daggerSeg(a,b){                                // Freihand: feste Rad-R
 function commitDagger(a,c,b){ pushUndo();               // Kurve: Cone folgt der Tangente (Rad = Kipp)
   const bez=t=>{ const u=1-t; return { x:u*u*a.x+2*u*t*c.x+t*t*b.x, y:u*u*a.y+2*u*t*c.y+t*t*b.y }; };
   let prev=bez(0), len=0; for(let t=0.04;t<=1;t+=0.04){ const q=bez(t); len+=dist(prev,q); prev=q; }
-  const tang=t=>{ const tx=2*(1-t)*(c.x-a.x)+2*t*(b.x-c.x), ty=2*(1-t)*(c.y-a.y)+2*t*(b.y-c.y);
-                  return Math.atan2(ty,tx)+Math.PI; };   // rein tangential: Nebel laeuft hinter der Spitze her, rotiert mit der Bahn
-  sx.clearRect(0,0,W,H); daggerPath(bez,len,tang); commitFullStroke();
+  // Nebel geht rechtwinklig zur Bahn ab (radial nach aussen), Seite (links/rechts der Fahrtrichtung)
+  // per S.coneSide waehlbar; die Normale dreht mit der Tangente, damit der Faecher dem Bogen folgt.
+  const norm=t=>{ const tx=2*(1-t)*(c.x-a.x)+2*t*(b.x-c.x), ty=2*(1-t)*(c.y-a.y)+2*t*(b.y-c.y);
+                  return Math.atan2(ty,tx)+S.coneSide*Math.PI/2; };
+  sx.clearRect(0,0,W,H); daggerPath(bez,len,norm); commitFullStroke();
 }
 
 // Vorschau (Rubber-Band)
@@ -914,6 +918,9 @@ const dagModeBtn=document.getElementById('dagMode');
 dagModeBtn.addEventListener('click',()=>{ S.dagMode=(S.dagMode==='free'?'curve':'free'); S.pts=[];
   dagModeBtn.textContent='Modus: '+(S.dagMode==='free'?'Freihand':'Kurve');
   updateStatus(); drawPreview(); });
+const dagSideBtn=document.getElementById('dagSide');
+dagSideBtn.addEventListener('click',()=>{ S.coneSide=-S.coneSide;
+  dagSideBtn.textContent='Seite: '+(S.coneSide<0?'Links':'Rechts'); });
 document.getElementById('coneLen').addEventListener('input',e=>{ S.coneLen=+e.target.value; });
 document.getElementById('coneWide').addEventListener('input',e=>{ S.coneWide=+e.target.value; });
 document.getElementById('coneHard').addEventListener('input',e=>{ S.coneHard=e.target.value/100; });
@@ -1012,7 +1019,7 @@ function updateStatus(){
     curve:'Klick Start · Klick Ende · Klick für Biegung',
     dagger: S.dagMode==='free'
       ? 'Freihand: ziehen · Nebel driftet in Rad-Richtung · Länge/Breite/Härte regeln den Cone'
-      : 'Kurve: Klick Start · Klick Ende · Klick für Biegung · Cone läuft automatisch tangential mit (Rad egal)',
+      : 'Kurve: Klick Start · Klick Ende · Klick für Biegung · Cone geht rechtwinklig ab & dreht mit · Seite Links/Rechts umstellbar',
     smudge:'Ziehen zum Verwischen nasser Farbe',
     eraser:'Ziehen zum Wegradieren',
   };
