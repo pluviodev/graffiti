@@ -553,6 +553,12 @@ function daggerSeg(a,b){                                // Freihand: feste Rad-R
   const dir=S.coneAngle*Math.PI/180, len=Math.hypot(b.x-a.x,b.y-a.y);
   daggerPath(t=>({x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t}), len, ()=>dir);
 }
+function commitDaggerLine(a,b){ pushUndo();              // gerade Linie: wie Freihand (Cone in Rad-Richtung, gleiche Dichte)
+  const dir=S.coneAngle*Math.PI/180, len=Math.hypot(b.x-a.x,b.y-a.y);
+  sx.clearRect(0,0,W,H);
+  daggerPath(t=>({x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t}), len, ()=>dir, 5);
+  commitFullStroke();
+}
 function commitDagger(a,c,b){ pushUndo();               // Kurve: Cone folgt der Tangente (Rad = Kipp)
   const bez=t=>{ const u=1-t; return { x:u*u*a.x+2*u*t*c.x+t*t*b.x, y:u*u*a.y+2*u*t*c.y+t*t*b.y }; };
   let prev=bez(0), len=0; for(let t=0.04;t<=1;t+=0.04){ const q=bez(t); len+=dist(prev,q); prev=q; }
@@ -570,7 +576,7 @@ function drawPreview(){
     pvx.save(); pvx.setLineDash([10,8]); pvx.lineWidth=2; pvx.strokeStyle=rgba('#00e08a',0.9);
     pvx.beginPath(); maskPath(pvx); pvx.closePath(); pvx.stroke(); pvx.restore();
   }
-  const isLineish=S.tool==='line';
+  const isLineish=S.tool==='line' || (S.tool==='dagger' && S.dagMode==='line');
   const isCurveish=S.tool==='curve' || (S.tool==='dagger' && S.dagMode==='curve');
   if((isLineish||isCurveish) && S.pts.length){
     pvx.save(); pvx.strokeStyle=rgba(S.color,0.9); pvx.lineWidth=2; pvx.setLineDash([6,6]);
@@ -705,6 +711,8 @@ preview.addEventListener('pointerdown', e=>{
     if(S.dagMode==='free'){
       pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y};
       sx.clearRect(0,0,W,H); daggerDab(p, S.coneAngle*Math.PI/180); renderFullPreview();
+    } else if(S.dagMode==='line'){
+      if(!S.pts.length){ S.pts=[p]; } else { commitDaggerLine(S.pts[0],p); S.pts=[]; }
     } else {
       if(S.pts.length<2){ S.pts.push(p); }
       else { commitDagger(S.pts[0],p,S.pts[1]); S.pts=[]; }
@@ -916,8 +924,9 @@ function markSwatch(){ document.querySelectorAll('.sw').forEach(s=>s.classList.t
 
 // --- Dagger-Regler + Winkel-Rad ---
 const dagModeBtn=document.getElementById('dagMode');
-dagModeBtn.addEventListener('click',()=>{ S.dagMode=(S.dagMode==='free'?'curve':'free'); S.pts=[];
-  dagModeBtn.textContent='Modus: '+(S.dagMode==='free'?'Freihand':'Kurve');
+dagModeBtn.addEventListener('click',()=>{
+  S.dagMode = S.dagMode==='free' ? 'line' : S.dagMode==='line' ? 'curve' : 'free'; S.pts=[];
+  dagModeBtn.textContent='Modus: '+({free:'Freihand',line:'Linie',curve:'Kurve'}[S.dagMode]);
   updateStatus(); drawPreview(); });
 const dagSideBtn=document.getElementById('dagSide');
 dagSideBtn.addEventListener('click',()=>{ S.coneSide=-S.coneSide;
@@ -1018,9 +1027,11 @@ function updateStatus(){
     spray:'Gedrückt halten & ziehen · Druck regelt stufenlos Nebel → fast solide Linie',
     line:'Klick = Startpunkt, zweiter Klick = Linie',
     curve:'Klick Start · Klick Ende · Klick für Biegung',
-    dagger: S.dagMode==='free'
-      ? 'Freihand: ziehen · Nebel driftet in Rad-Richtung · Länge/Breite/Härte regeln den Cone'
-      : 'Kurve: Klick Start · Klick Ende · Klick für Biegung · Cone geht rechtwinklig ab & dreht mit · Seite Links/Rechts umstellbar',
+    dagger: ({
+      free:'Freihand: ziehen · Nebel driftet in Rad-Richtung · Länge/Breite/Härte regeln den Cone',
+      line:'Linie: Klick Start · Klick Ende · gerade Linie, sonst wie Freihand (Nebel in Rad-Richtung)',
+      curve:'Kurve: Klick Start · Klick Ende · Klick für Biegung · Cone rechtwinklig & dreht mit · Seite Links/Rechts',
+    })[S.dagMode],
     smudge:'Ziehen zum Verwischen nasser Farbe',
     eraser:'Ziehen zum Wegradieren',
   };
