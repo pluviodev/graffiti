@@ -29,6 +29,14 @@
     border-radius:8px;padding:7px 10px;font-size:13px;cursor:pointer}
   button.tool.active,button.act.active{background:var(--accent);color:#04120c;border-color:var(--accent);font-weight:600}
   button.act:hover,button.tool:hover,select:hover{border-color:#4a5563}
+  /* gleich große, quadratische Icon-Buttons (Symbol + Hover-Tooltip statt Text/Emoji) */
+  .iconbtn{width:40px;height:40px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+  .iconbtn svg{width:20px;height:20px;display:block}
+  /* Metallic-Chips: zeigen den senkrechten Metall-Verlauf als Vorschau */
+  .metalchip{cursor:pointer}
+  .metal-chrome{background:linear-gradient(180deg,#eef4f8,#aeb8c2 38%,#20262d 50%,#586471 57%,#c4ced6 74%,#eff4f8)}
+  .metal-gold{background:linear-gradient(180deg,#fff6d0,#f0cb55 38%,#5c3a09 50%,#b07d1e 57%,#f6d871 74%,#fff6d0)}
+  .metal-copper{background:linear-gradient(180deg,#ffe3cc,#d98a5e 38%,#43200f 50%,#8a4a2c 57%,#e0a075 74%,#ffe3cc)}
   input[type=range]{width:120px;accent-color:var(--accent)}
   input[type=color]{width:38px;height:34px;padding:0;border:1px solid var(--line);
     border-radius:8px;background:none;cursor:pointer}
@@ -123,12 +131,18 @@
   <div id="toolbar">
     <div class="grp">
       <label>Werkzeug</label>
-      <button class="tool active" data-tool="spray">🎨 Sprühen</button>
-      <button class="tool" data-tool="line">📏 Linie</button>
-      <button class="tool" data-tool="curve">〰️ Kurve</button>
-      <button class="tool" data-tool="dagger">🗡️ Dagger</button>
-      <button class="tool" data-tool="smudge">👆 Verwischen</button>
-      <button class="tool" data-tool="eraser">🧽 Radierer</button>
+      <button class="tool iconbtn active" data-tool="spray" title="Sprühen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="9" width="9" height="12" rx="1.5"/><path d="M9 9V6h5v3"/><path d="M16 5h.5M18 4v.5M19.5 6h.5M18 7.5v.5"/></svg></button>
+      <button class="tool iconbtn" data-tool="line" title="Linie">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/></svg></button>
+      <button class="tool iconbtn" data-tool="curve" title="Kurve">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16c3-9 13 2 16-8"/></svg></button>
+      <button class="tool iconbtn" data-tool="dagger" title="Dagger (schräge Dose)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l3.5-3.5"/><path d="M8 16 19 5c.6 3.5-1 8.5-6.5 10.5z"/></svg></button>
+      <button class="tool iconbtn" data-tool="smudge" title="Verwischen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15c4 2.5 8-3.5 12-1.5M6 10.5c3 1.5 6-2.5 9-.5"/></svg></button>
+      <button class="tool iconbtn" data-tool="eraser" title="Radierer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18h13"/><rect x="5.5" y="8" width="10" height="7" rx="1.2" transform="rotate(-42 10 11.5)"/></svg></button>
     </div>
 
     <div class="grp">
@@ -158,6 +172,16 @@
       <div class="swatches" id="swatches"></div>
     </div>
 
+    <div class="grp" id="metalGrp">
+      <label>Metallic</label>
+      <div class="swatches">
+        <div class="sw metalchip metal-chrome" data-metal="chrome" title="Chrom / Silber"></div>
+        <div class="sw metalchip metal-gold"   data-metal="gold"   title="Gold"></div>
+        <div class="sw metalchip metal-copper" data-metal="copper" title="Kupfer / Bronze"></div>
+      </div>
+      <button class="act" id="metalMode" title="Fill: EIN Chrome-Verlauf über die ganze Wand (klassischer Piece-Look). Klick = auf Schimmer wechseln.">Fill</button>
+    </div>
+
     <div class="grp">
       <label>Wand</label>
       <select id="bgSel">
@@ -174,16 +198,31 @@
     </div>
 
     <div class="grp">
-      <button class="act" id="undo">↶ Zurück</button>
-      <button class="act" id="redo">↷ Vor</button>
-      <button class="act" id="clear">Leeren</button>
-      <button class="act" id="save">💾 PNG</button>
-      <button class="act" id="maskBtn">Wand-Rand: aus</button>
-      <button class="act" id="editMaskBtn">◱ Bereich anpassen</button>
-      <button class="act" id="drawMaskBtn">✎ Käfig zeichnen</button>
-      <button class="act" id="roundBtn">⬭ Rund: aus</button>
-      <button class="act" id="exportMaskBtn">⬇︎ Bereiche exportieren</button>
-      <button class="act" id="fsBtn">⛶ Vollbild</button>
+      <label>Bereich</label>
+      <button class="act iconbtn" id="maskBtn" title="Wand-Rand anzeigen: aus (Klick = an)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="1" stroke-dasharray="3 3"/></svg></button>
+      <button class="act iconbtn" id="editMaskBtn" title="Malbereich anpassen (Ecken ziehen)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10"/><circle cx="7" cy="7" r="1.8" fill="currentColor" stroke="none"/><circle cx="17" cy="7" r="1.8" fill="currentColor" stroke="none"/><circle cx="7" cy="17" r="1.8" fill="currentColor" stroke="none"/><circle cx="17" cy="17" r="1.8" fill="currentColor" stroke="none"/></svg></button>
+      <button class="act iconbtn" id="drawMaskBtn" title="Eigenen Käfig zeichnen (Punkte klicken)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-3.5L15 6.5l2.5 2.5L7.5 19z"/><path d="M14 7.5 16.5 5 19 7.5 16.5 10z"/></svg></button>
+      <button class="act iconbtn" id="roundBtn" title="Runder Käfig (Ellipse): aus (Klick = an)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="8.5" ry="5.5"/></svg></button>
+      <button class="act iconbtn" id="exportMaskBtn" title="Bereiche exportieren (JSON)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4H7a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M14 4v4h4"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg></button>
+    </div>
+
+    <div class="grp">
+      <label>Aktionen</label>
+      <button class="act iconbtn" id="undo" title="Zurück (Undo)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7 4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-2"/></svg></button>
+      <button class="act iconbtn" id="redo" title="Vor (Redo)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7l5 5-5 5"/><path d="M20 12H9a5 5 0 0 0 0 10h2"/></svg></button>
+      <button class="act iconbtn" id="clear" title="Alles leeren">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4.5h4V7M6.5 7l1 12.5h9L17.5 7"/></svg></button>
+      <button class="act iconbtn" id="save" title="Als PNG speichern">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10M8 10l4 4 4-4"/><path d="M5 19h14"/></svg></button>
+      <button class="act iconbtn" id="fsBtn" title="Vollbild">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     </div>
   </div>
 
@@ -274,6 +313,8 @@ const S = {
   tool:'spray',
   bg:'photo',
   color:'#ff2d55',
+  metal:null,            // null = normale Farbe, sonst {metal:'chrome'|'gold'|'copper', mode:'fill'|'shimmer'}
+  metalMode:'fill',      // gemerkter Modus für die Metallic-Chips ('fill' | 'shimmer')
   pressure:0.55,
   cap:'fat',
   // Dagger (schräge Dose): Modus + Cone-Parameter
@@ -372,6 +413,7 @@ function coreDab(x,y,r){ const cf=coreFrac(); if(cf<=0.01) return;
 
 // Sprüh-Körnung um einen Punkt in den Puffer – Dichte & Deckung steigen mit Druck
 function speckle(x,y,r){
+  noteY(y-r); noteY(y+r);
   const cap=CAPS[S.cap], p=S.pressure, cf=coreFrac();
   const n=Math.round(r*cap.density*(0.6+p*2.4));
   const rimMax=r*(1.06+cap.spread*0.25), band=Math.max(1e-3, rimMax-r*cf);
@@ -395,6 +437,35 @@ function drawMaskDash(){ if(!(S.showMask&&S.mask)) return;
 // --- Strich-Puffer -> gleichmäßige Transparenz (Überlappungen laufen nicht zu) ---
 const strokeCv=document.createElement('canvas'); strokeCv.width=W; strokeCv.height=H;
 const sx=strokeCv.getContext('2d');
+
+// --- Metallic (Chrom/Gold/Kupfer): senkrechter Verlauf, per source-atop über den Strich getönt ---
+// Stops: hell -> dunkles Horizont-Band bei ~0.5 -> heller Schimmer -> hell
+const METALS={
+  chrome:{stops:[[0,'#e8eef3'],[0.30,'#aeb8c2'],[0.47,'#3b434d'],[0.50,'#20262d'],[0.55,'#586471'],[0.72,'#c4ced6'],[1,'#eff4f8']], drip:'#8b96a1'},
+  gold:  {stops:[[0,'#fff3c4'],[0.30,'#f0cb55'],[0.47,'#8a5a12'],[0.50,'#5c3a09'],[0.55,'#b07d1e'],[0.72,'#f6d871'],[1,'#fff6d0']], drip:'#b8892b'},
+  copper:{stops:[[0,'#ffd9be'],[0.30,'#d98a5e'],[0.47,'#5e2f18'],[0.50,'#43200f'],[0.55,'#8a4a2c'],[0.72,'#e0a075'],[1,'#ffe3cc']], drip:'#9c5a34'},
+};
+const tintCv=document.createElement('canvas'); tintCv.width=W; tintCv.height=H;
+const tsx=tintCv.getContext('2d');
+let sbox=null;   // laufende vertikale Bounding-Box des aktuellen Strichs (für Schimmer-Modus)
+function noteY(y){ if(sbox){ if(y<sbox.y0)sbox.y0=y; if(y>sbox.y1)sbox.y1=y; } else sbox={y0:y,y1:y}; }
+function resetBuf(){ sx.clearRect(0,0,W,H); sbox=null; }
+// vertikale Spanne des Metallic-Verlaufs: Fill = Käfig-Bbox (gemeinsamer Horizont), Schimmer = eigener Strich
+function metalSpan(){
+  if(S.metal.mode==='fill'){ const b=S.mask?maskBBox():{y0:0,y1:H}; return [b.y0,b.y1]; }
+  if(sbox) return [sbox.y0-2, sbox.y1+2];
+  return [0,H];
+}
+// Kopie des Strichs, mit Metallic-Verlauf getönt (Alpha/Grain bleibt = Glanz)
+function metalStroke(){
+  tsx.clearRect(0,0,W,H); tsx.drawImage(strokeCv,0,0);
+  const sp=metalSpan(), top=sp[0], bot=Math.max(sp[0]+1, sp[1]);
+  const g=tsx.createLinearGradient(0,top,0,bot);
+  METALS[S.metal.metal].stops.forEach(s=>g.addColorStop(s[0],s[1]));
+  tsx.save(); tsx.globalCompositeOperation='source-atop'; tsx.fillStyle=g; tsx.fillRect(0,0,W,H); tsx.restore();
+  return tintCv;
+}
+
 function bufDab(x,y){ const r=curR(); coreDab(x,y,r); speckle(x,y,r); }
 function bufSeg(a,b){ const r=curR(), cf=coreFrac();
   if(cf>0.01){ sx.strokeStyle=rgba(S.color,1); sx.lineWidth=r*cf*2; sx.lineCap='round'; sx.lineJoin='round';
@@ -402,10 +473,12 @@ function bufSeg(a,b){ const r=curR(), cf=coreFrac();
   const step=Math.max(1.5, r*0.28), d=Math.hypot(b.x-a.x,b.y-a.y), n=Math.max(1,Math.round(d/step));
   for(let i=1;i<=n;i++){ const t=i/n; speckle(a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t, r); } }
 function renderFullPreview(){ pvx.clearRect(0,0,W,H); drawMaskDash();
-  pvx.save(); maskClip(pvx); pvx.globalAlpha=fullAlpha(); pvx.drawImage(strokeCv,0,0); pvx.restore(); }
+  const src=S.metal?metalStroke():strokeCv;
+  pvx.save(); maskClip(pvx); pvx.globalAlpha=fullAlpha(); pvx.drawImage(src,0,0); pvx.restore(); }
 function commitFullStroke(){
-  withMask(px,()=>{ px.save(); px.globalAlpha=fullAlpha(); px.drawImage(strokeCv,0,0); px.restore(); });
-  sx.clearRect(0,0,W,H); pvx.clearRect(0,0,W,H); drawPreview();
+  const src=S.metal?metalStroke():strokeCv;
+  withMask(px,()=>{ px.save(); px.globalAlpha=fullAlpha(); px.drawImage(src,0,0); px.restore(); });
+  resetBuf(); pvx.clearRect(0,0,W,H); drawPreview();
 }
 
 // Radierer (immer direkt, voll deckend entfernen)
@@ -433,7 +506,7 @@ function maybeSpawnDrip(x,y){
     const a = sx.getImageData(Math.round(dropX), Math.round(dropY), 1, 1).data[3];
     if(a < 40) return;
     drips.push({
-      x:dropX, y:dropY, color:S.color,
+      x:dropX, y:dropY, color:(S.metal?METALS[S.metal.metal].drip:S.color),
       w: 1.2 + S.pressure*r*0.07 + Math.random()*1.4,
       speed: 0.5 + Math.random()*0.6 + S.pressure*0.4,
       accel: 0.006 + Math.random()*0.010,
@@ -503,11 +576,11 @@ function bufPath(getPoint){
   for(let i=0;i<=N;i++){ const q=getPoint(i/N); speckle(q.x,q.y,r); }
 }
 function commitLine(a,b){ pushUndo();
-  sx.clearRect(0,0,W,H); bufPath(t=>({x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t})); commitFullStroke();
+  resetBuf(); bufPath(t=>({x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t})); commitFullStroke();
 }
 function commitCurve(a,c,b){ pushUndo();
   const bez=t=>{ const u=1-t; return { x:u*u*a.x+2*u*t*c.x+t*t*b.x, y:u*u*a.y+2*u*t*c.y+t*t*b.y }; };
-  sx.clearRect(0,0,W,H); bufPath(bez); commitFullStroke();
+  resetBuf(); bufPath(bez); commitFullStroke();
 }
 
 //------------------------------------------------------------------
@@ -518,6 +591,7 @@ function commitCurve(a,c,b){ pushUndo();
 function coneSpeckle(x,y,dir){
   const cap=CAPS[S.cap], p=S.pressure, hard=S.coneHard;
   const L=S.coneLen, half=S.coneWide*Math.PI/180;
+  noteY(y-L); noteY(y+L);
   const base=cap.radius*(0.22+p*0.35);                 // Breite direkt an der Spitze
   const dx=Math.cos(dir), dy=Math.sin(dir), nx=-dy, ny=dx;
   const maxW=base+Math.tan(half)*L;                    // Halbbreite am Cone-Ende
@@ -536,6 +610,7 @@ function coneSpeckle(x,y,dir){
 }
 function daggerCore(x,y){                               // harter Kern-Punkt (die Spitze)
   const cap=CAPS[S.cap], r=Math.max(1.2, cap.radius*(0.16+S.pressure*0.34));
+  noteY(y-r); noteY(y+r);
   sx.fillStyle=rgba(S.color,1); sx.beginPath(); sx.arc(x,y,r,0,TAU); sx.fill();
 }
 function daggerDab(pt,dir){ daggerCore(pt.x,pt.y); coneSpeckle(pt.x,pt.y,dir); }
@@ -555,7 +630,7 @@ function daggerSeg(a,b){                                // Freihand: feste Rad-R
 }
 function commitDaggerLine(a,b){ pushUndo();              // gerade Linie: wie Freihand (Cone in Rad-Richtung, gleiche Dichte)
   const dir=S.coneAngle*Math.PI/180, len=Math.hypot(b.x-a.x,b.y-a.y);
-  sx.clearRect(0,0,W,H);
+  resetBuf();
   daggerPath(t=>({x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t}), len, ()=>dir, 5);
   commitFullStroke();
 }
@@ -566,7 +641,7 @@ function commitDagger(a,c,b){ pushUndo();               // Kurve: Cone folgt der
   // per S.coneSide waehlbar; die Normale dreht mit der Tangente, damit der Faecher dem Bogen folgt.
   const norm=t=>{ const tx=2*(1-t)*(c.x-a.x)+2*t*(b.x-c.x), ty=2*(1-t)*(c.y-a.y)+2*t*(b.y-c.y);
                   return Math.atan2(ty,tx)+S.coneSide*Math.PI/2; };
-  sx.clearRect(0,0,W,H); daggerPath(bez,len,norm,5); commitFullStroke();   // dichter stempeln = so satt wie Freihand
+  resetBuf(); daggerPath(bez,len,norm,5); commitFullStroke();   // dichter stempeln = so satt wie Freihand
 }
 
 // Vorschau (Rubber-Band)
@@ -620,7 +695,7 @@ function drawPreview(){
 }
 function finishDrawMask(){
   S.drawMask=false; S.maskPts=[];
-  const b=document.getElementById('drawMaskBtn'); b.classList.remove('active'); b.textContent='✎ Käfig zeichnen';
+  const b=document.getElementById('drawMaskBtn'); b.classList.remove('active'); b.title='Eigenen Käfig zeichnen (Punkte klicken)';
   syncRoundBtn(); updateStatus(); drawPreview();
 }
 function cancelDrawMask(){ S.maskPts=[]; finishDrawMask(); }
@@ -668,7 +743,7 @@ preview.addEventListener('pointerdown', e=>{
   activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(activePointers.size>1){                    // zweiter Finger -> Zoom/Pan, evtl. Strich verwerfen
     gestureActive=true; gLastMid=null;
-    if(S.drawing){ S.drawing=false; sx.clearRect(0,0,W,H); }
+    if(S.drawing){ S.drawing=false; resetBuf(); }
     S.pts=[]; drawPreview(); return;
   }
   const p=pos(e); S.cur=p; S.last=p; S.stationary=0;
@@ -699,7 +774,7 @@ preview.addEventListener('pointerdown', e=>{
     pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y}; eraseDab(p.x,p.y);
   } else if(S.tool==='spray'){
     pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y};
-    sx.clearRect(0,0,W,H); bufDab(p.x,p.y); renderFullPreview();
+    resetBuf(); bufDab(p.x,p.y); renderFullPreview();
   } else if(S.tool==='smudge'){
     pushUndo(); S.drawing=true;
   } else if(S.tool==='line'){
@@ -710,7 +785,7 @@ preview.addEventListener('pointerdown', e=>{
   } else if(S.tool==='dagger'){
     if(S.dagMode==='free'){
       pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y};
-      sx.clearRect(0,0,W,H); daggerDab(p, S.coneAngle*Math.PI/180); renderFullPreview();
+      resetBuf(); daggerDab(p, S.coneAngle*Math.PI/180); renderFullPreview();
     } else if(S.dagMode==='line'){
       if(!S.pts.length){ S.pts=[p]; } else { commitDaggerLine(S.pts[0],p); S.pts=[]; }
     } else {
@@ -914,13 +989,30 @@ capSel.addEventListener('change',()=>{ S.cap=capSel.value; updateStatus(); });
 const pr=document.getElementById('pressure'), prv=document.getElementById('pressureVal');
 pr.addEventListener('input',()=>{ setPressure(pr.value); });
 const colorInp=document.getElementById('color');
-colorInp.addEventListener('input',()=>{ S.color=colorInp.value; markSwatch(); updateColorFab(); });
+colorInp.addEventListener('input',()=>{ S.color=colorInp.value; clearMetal(); markSwatch(); updateColorFab(); });
 
 const PALETTE=['#ff2d55','#ff9500','#ffdd00','#34c759','#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ff2d92','#ffffff','#000000','#8e8e93'];
 const swWrap=document.getElementById('swatches');
 PALETTE.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
-  d.addEventListener('click',()=>{ S.color=c; colorInp.value=c; markSwatch(); updateColorFab(); }); swWrap.appendChild(d); });
-function markSwatch(){ document.querySelectorAll('.sw').forEach(s=>s.classList.toggle('sel', s.dataset.c.toLowerCase()===S.color.toLowerCase())); }
+  d.addEventListener('click',()=>{ S.color=c; colorInp.value=c; clearMetal(); markSwatch(); updateColorFab(); }); swWrap.appendChild(d); });
+function markSwatch(){ document.querySelectorAll('.sw').forEach(s=>s.classList.toggle('sel', !S.metal && s.dataset.c.toLowerCase()===S.color.toLowerCase())); }
+
+// --- Metallic: 3 Chips (Chrom/Gold/Kupfer) + Fill/Schimmer-Toggle ---
+function clearMetal(){ S.metal=null; markMetal(); }
+function markMetal(){ document.querySelectorAll('.metalchip').forEach(c=>
+  c.classList.toggle('sel', !!S.metal && c.dataset.metal===S.metal.metal)); updateStatus(); }
+document.querySelectorAll('.metalchip').forEach(c=>{
+  c.addEventListener('click',()=>{ S.metal={metal:c.dataset.metal, mode:S.metalMode}; markSwatch(); markMetal(); updateColorFab(); });
+});
+const metalModeBtn=document.getElementById('metalMode');
+if(metalModeBtn) metalModeBtn.addEventListener('click',()=>{
+  S.metalMode = S.metalMode==='fill' ? 'shimmer' : 'fill';
+  metalModeBtn.textContent = S.metalMode==='fill' ? 'Fill' : 'Schimmer';
+  metalModeBtn.title = S.metalMode==='fill'
+    ? 'Fill: EIN Chrome-Verlauf über die ganze Wand (klassischer Piece-Look). Klick = auf Schimmer wechseln.'
+    : 'Schimmer: jeder Strich glänzt für sich. Klick = auf Fill wechseln.';
+  if(S.metal){ S.metal.mode=S.metalMode; updateStatus(); }
+});
 
 // --- Dagger-Regler + Winkel-Rad ---
 const dagModeBtn=document.getElementById('dagMode');
@@ -972,23 +1064,28 @@ document.getElementById('save').addEventListener('click',()=>{
   tx.drawImage(bg,0,0); tx.drawImage(paint,0,0);
   const a=document.createElement('a'); a.download='graffiti.png'; a.href=t.toDataURL('image/png'); a.click();
 });
+const CT=(id)=>document.getElementById(id);   // kurz
 document.getElementById('maskBtn').addEventListener('click',e=>{
-  S.showMask=!S.showMask; e.target.textContent='Wand-Rand: '+(S.showMask?'an':'aus'); drawPreview();
+  const b=e.currentTarget; S.showMask=!S.showMask;
+  b.classList.toggle('active', S.showMask);
+  b.title='Wand-Rand anzeigen: '+(S.showMask?'an (Klick = aus)':'aus (Klick = an)'); drawPreview();
 });
 document.getElementById('editMaskBtn').addEventListener('click',e=>{
+  const b=e.currentTarget;
   if(!S.mask){ return; }   // nur bei aktivem Wand-Bereich
   if(S.drawMask) cancelDrawMask();
   S.editMask=!S.editMask;
-  e.target.classList.toggle('active', S.editMask);
-  e.target.textContent = S.editMask ? '✓ Fertig' : '◱ Bereich anpassen';
+  b.classList.toggle('active', S.editMask);
+  b.title = S.editMask ? 'Fertig – Bereich-Ecken ziehen aktiv (Klick = beenden)' : 'Malbereich anpassen (Ecken ziehen)';
   updateStatus(); drawPreview();
 });
 document.getElementById('drawMaskBtn').addEventListener('click',e=>{
+  const b=e.currentTarget;
   if(S.drawMask){ cancelDrawMask(); return; }   // erneut = abbrechen
   // Bearbeiten-Modus beenden
-  if(S.editMask){ S.editMask=false; const eb=document.getElementById('editMaskBtn'); eb.classList.remove('active'); eb.textContent='◱ Bereich anpassen'; }
+  if(S.editMask){ S.editMask=false; const eb=document.getElementById('editMaskBtn'); eb.classList.remove('active'); eb.title='Malbereich anpassen (Ecken ziehen)'; }
   S.drawMask=true; S.maskPts=[];
-  e.target.classList.add('active'); e.target.textContent='✕ Zeichnen abbrechen';
+  b.classList.add('active'); b.title='Käfig zeichnen – Punkte klicken, am Start schließen (Klick = abbrechen)';
   updateStatus(); drawPreview();
 });
 document.getElementById('roundBtn').addEventListener('click',()=>{
@@ -996,7 +1093,7 @@ document.getElementById('roundBtn').addEventListener('click',()=>{
   S.maskRound=!S.maskRound; saveRound(); syncRoundBtn(); drawPreview();
 });
 function syncRoundBtn(){ const b=document.getElementById('roundBtn');
-  b.textContent='⬭ Rund: '+(S.maskRound?'an':'aus'); b.classList.toggle('active', S.maskRound); }
+  b.title='Runder Käfig (Ellipse): '+(S.maskRound?'an (Klick = aus)':'aus (Klick = an)'); b.classList.toggle('active', S.maskRound); }
 document.getElementById('exportMaskBtn').addEventListener('click', exportMasks);
 // Vollbild (Fullscreen-API; auf iPhone-Safari nicht verfügbar -> dort „Zum Startbildschirm")
 document.getElementById('fsBtn').addEventListener('click',()=>{
@@ -1012,7 +1109,8 @@ document.getElementById('fsBtn').addEventListener('click',()=>{
 });
 document.addEventListener('fullscreenchange',()=>{
   const b=document.getElementById('fsBtn');
-  if(b) b.textContent = document.fullscreenElement ? '⛶ Vollbild beenden' : '⛶ Vollbild';
+  if(b){ b.classList.toggle('active', !!document.fullscreenElement);
+         b.title = document.fullscreenElement ? 'Vollbild beenden' : 'Vollbild'; }
   fitStage();
 });
 
@@ -1045,7 +1143,10 @@ function updateStatus(){
       '<b>Malbereich anpassen</b> · Eck-Punkte ziehen oder in die Fläche fassen zum Verschieben · „✓ Fertig" zum Abschließen';
     return;
   }
+  const metalTag = S.metal
+    ? `<b>${({chrome:'Chrom',gold:'Gold',copper:'Kupfer'})[S.metal.metal]}</b> (${S.metal.mode==='fill'?'Fill':'Schimmer'}) · ` : '';
   document.getElementById('status').innerHTML =
+    metalTag +
     `<b>${CAPS[S.cap].label}</b> · Druck ${Math.round(S.pressure*100)}% · ${hints[S.tool]} · `+
     `<kbd>Strg</kbd>+<kbd>Z</kbd> Zurück`;
 }
@@ -1141,7 +1242,7 @@ function updateColorFab(){ const f=document.getElementById('colorFab'); if(f) f.
 
   // --- Farb-Ring ---
   PALETTE.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
-    d.addEventListener('click',()=>{ S.color=c; document.getElementById('color').value=c; markSwatch(); updateColorFab(); colorRing.classList.remove('open'); });
+    d.addEventListener('click',()=>{ S.color=c; document.getElementById('color').value=c; clearMetal(); markSwatch(); updateColorFab(); colorRing.classList.remove('open'); });
     colorRing.appendChild(d); });
   colorFab.addEventListener('click',()=>colorRing.classList.toggle('open'));
 
