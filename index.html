@@ -143,6 +143,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15c4 2.5 8-3.5 12-1.5M6 10.5c3 1.5 6-2.5 9-.5"/></svg></button>
       <button class="tool iconbtn" data-tool="eraser" title="Radierer">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18h13"/><rect x="5.5" y="8" width="10" height="7" rx="1.2" transform="rotate(-42 10 11.5)"/></svg></button>
+      <button class="tool iconbtn" data-tool="fill" title="Füllen (Farbe in eine Fläche tippen)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 10.5a6 6 0 0 1-12 0C6 9.5 12 3 12 3z"/></svg></button>
     </div>
 
     <div class="grp">
@@ -158,6 +160,11 @@
       <label class="dl">Breite</label><input type="range" id="coneWide" min="4" max="55" value="22">
       <label class="dl">Härte</label><input type="range" id="coneHard" min="0" max="100" value="45">
       <div id="angleDial" title="Nebel-Richtung"><div id="dialHandle"></div></div>
+    </div>
+
+    <div class="grp" id="fillGrp" style="display:none">
+      <label>Füllen</label>
+      <label class="dl">Toleranz</label><input type="range" id="fillTol" min="0" max="100" value="50" title="Niedrig = eng & auslauf-sicher · Hoch = füllt durch dünnen Nebel">
     </div>
 
     <div class="grp">
@@ -337,6 +344,7 @@ const S = {
   drawMask:false,     // true = eigenen Käfig per Klick zeichnen
   maskPts:[],         // Punkte des in Arbeit befindlichen Käfigs [{x,y},...]
   editMask:false,     // Malbereich-Kasten anpassen
+  fillTol:50,         // Füllen: Toleranz (0 = eng/auslauf-sicher .. 100 = aggressiv durch Nebel)
 };
 
 const drips = [];   // aktive Tropfen
@@ -487,6 +495,64 @@ function eraseDab(x,y){ const r=curR(); withMask(px,()=>{ px.save(); px.globalCo
 function eraseSeg(a,b){ const r=curR(); withMask(px,()=>{ px.save(); px.globalCompositeOperation='destination-out';
   px.strokeStyle='#000'; px.lineWidth=r*2; px.lineCap='round'; px.lineJoin='round';
   px.beginPath(); px.moveTo(a.x,a.y); px.lineTo(b.x,b.y); px.stroke(); px.restore(); }); }
+
+//------------------------------------------------------------------
+// Füllen (ColorDrop): Flood-Fill bis zu den Linien, saubere Kanten
+//------------------------------------------------------------------
+// Käfig als Pixel-Lookup (Alpha>0 = innerhalb); null wenn kein Käfig gesetzt
+function cageAlpha(){
+  if(!S.mask) return null;
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const cx=c.getContext('2d');
+  cx.fillStyle='#fff'; cx.beginPath(); maskPath(cx); cx.closePath(); cx.fill();
+  return cx.getImageData(0,0,W,H).data;
+}
+function doFill(p){
+  const sx0=Math.round(p.x), sy0=Math.round(p.y);
+  if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
+  const thr=25 + (S.fillTol/100)*175;          // Alpha-Schwelle: darunter = "leer" (füllbar), darüber = Grenze
+  const a=px.getImageData(0,0,W,H).data;
+  const cage=cageAlpha();
+  const fillable=(x,y)=>{ const i=y*W+x; return a[i*4+3]<=thr && (!cage || cage[i*4+3]>0); };
+  if(!fillable(sx0,sy0)){
+    document.getElementById('status').innerHTML='<b>Füllen</b> · hier ist schon Farbe (oder außerhalb des Käfigs) – tippe in eine freie Fläche';
+    return;
+  }
+  // Scanline-Flood-Fill: sammelt die zusammenhängende freie Fläche bis zu den Linien / zum Käfigrand
+  const mask=new Uint8Array(W*H);
+  const stack=[sx0,sy0];
+  while(stack.length){
+    const y=stack.pop(), x=stack.pop();
+    let nx=x;
+    while(nx>=0 && !mask[y*W+nx] && fillable(nx,y)) nx--;
+    nx++;
+    let up=false, dn=false;
+    while(nx<W && !mask[y*W+nx] && fillable(nx,y)){
+      mask[y*W+nx]=1;
+      if(y>0){ const f=!mask[(y-1)*W+nx] && fillable(nx,y-1);
+        if(f&&!up){ stack.push(nx,y-1); up=true; } else if(!f) up=false; }
+      if(y<H-1){ const f=!mask[(y+1)*W+nx] && fillable(nx,y+1);
+        if(f&&!dn){ stack.push(nx,y+1); dn=true; } else if(!f) dn=false; }
+      nx++;
+    }
+  }
+  // Füll-Ebene in der aktuellen Farbe aufbauen (harte Pixelmaske)
+  const fc=document.createElement('canvas'); fc.width=W; fc.height=H;
+  const fx=fc.getContext('2d');
+  const fimg=fx.createImageData(W,H), fd=fimg.data;
+  const [rr,gg,bb]=hexToRgb(S.color);
+  for(let i=0;i<W*H;i++){ if(mask[i]){ const j=i*4; fd[j]=rr; fd[j+1]=gg; fd[j+2]=bb; fd[j+3]=255; } }
+  fx.putImageData(fimg,0,0);
+  // Aufbringen: HINTER die vorhandene Farbe (Outline bleibt oben) + leichter Weichzeichner = saubere Kanten
+  pushUndo();
+  px.save();
+  px.globalCompositeOperation='destination-over';
+  px.filter='blur(0.7px)';
+  px.drawImage(fc,0,0);
+  px.filter='none';
+  px.restore();
+  drawPreview(); updateStatus();
+}
 
 //------------------------------------------------------------------
 // Tropfen (Drips)
@@ -770,7 +836,9 @@ preview.addEventListener('pointerdown', e=>{
     return;
   }
 
-  if(S.tool==='eraser'){
+  if(S.tool==='fill'){
+    doFill(p);
+  } else if(S.tool==='eraser'){
     pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y}; eraseDab(p.x,p.y);
   } else if(S.tool==='spray'){
     pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y};
@@ -990,12 +1058,15 @@ function selectTool(name){
   S.tool=name; S.pts=[];
   document.querySelectorAll('button.tool').forEach(x=>x.classList.toggle('active', x.dataset.tool===name));
   const dg=document.getElementById('dagGrp'); if(dg) dg.style.display=(name==='dagger'?'':'none');
+  const fg=document.getElementById('fillGrp'); if(fg) fg.style.display=(name==='fill'?'':'none');
   updateToolFab(); drawPreview(); updateStatus();
 }
 document.querySelectorAll('button.tool').forEach(b=>{ b.addEventListener('click',()=>selectTool(b.dataset.tool)); });
 capSel.addEventListener('change',()=>{ S.cap=capSel.value; updateStatus(); });
 const pr=document.getElementById('pressure'), prv=document.getElementById('pressureVal');
 pr.addEventListener('input',()=>{ setPressure(pr.value); });
+const fillTolInp=document.getElementById('fillTol');
+if(fillTolInp) fillTolInp.addEventListener('input',()=>{ S.fillTol=+fillTolInp.value; });
 const colorInp=document.getElementById('color');
 colorInp.addEventListener('input',()=>{ S.color=colorInp.value; clearMetal(); markSwatch(); updateColorFab(); });
 
@@ -1140,6 +1211,7 @@ function updateStatus(){
     })[S.dagMode],
     smudge:'Ziehen zum Verwischen nasser Farbe',
     eraser:'Ziehen zum Wegradieren',
+    fill:'In eine freie Fläche tippen – Farbe läuft bis zu den Linien voll · Toleranz regelt Auslauf-Sicherheit',
   };
   if(S.drawMask){
     document.getElementById('status').innerHTML =
@@ -1162,8 +1234,8 @@ function updateStatus(){
 //------------------------------------------------------------------
 // Mobil-Bedienung: Werkzeug-Rad (halten & ziehen), Farb-Ring, ☰-Menü
 //------------------------------------------------------------------
-const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',dagger:'🗡️',smudge:'👆',eraser:'🧽'};
-const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',dagger:'Dagger',smudge:'Verwischen',eraser:'Radierer'};
+const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',dagger:'🗡️',smudge:'👆',eraser:'🧽',fill:'🪣'};
+const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',dagger:'Dagger',smudge:'Verwischen',eraser:'Radierer',fill:'Füllen'};
 function updateToolFab(){ const f=document.getElementById('toolFab'); if(f) f.textContent=TOOL_EMOJI[S.tool]||'🎨'; }
 function updateColorFab(){ const f=document.getElementById('colorFab'); if(f) f.style.background=S.color; }
 
