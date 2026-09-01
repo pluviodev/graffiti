@@ -1568,6 +1568,42 @@ async function renderHof(){
 document.getElementById('hofBtn').addEventListener('click', renderHof);
 
 //------------------------------------------------------------------
+// Battle – Wort der Woche (deterministisch, kein Server)
+//------------------------------------------------------------------
+const BATTLE_WORDS = ["KING","CROWN","STYLE","FRESH","BOMB","FLOW","WILD","FUNK","VIBE","DOPE","DRIP","FUME","TAGS","CITY","NEON","RIOT","ZONE","HYPE","WAVE","GLOW","FADE","EDGE","BOLD","GRIM","HALO","ICON","LOUD","MYTH","NOVA","OMEN","PULSE","QUAKE","REBEL","SMOKE","STORM","TOXIC","URBAN","VIRUS","BLAZE","CHAOS","CRAZE","FLASH","FROST","GHOST","GLYPH","HEIST","KAPOW","PRISM","ROGUE","SPARK","TITAN","VENOM"];
+// Fester Epoch-Freitag: Fr 2026-09-04, 00:00 lokale Zeit. (Monat 0-basiert -> 8 = September)
+const BATTLE_EPOCH = new Date(2026, 8, 4, 0, 0, 0, 0).getTime();
+const DAY = 864e5;
+function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x.getTime(); }
+// Anzahl vollständiger 7-Tage-Blöcke seit dem Epoch-Freitag (wechselt Freitag 00:00)
+function battleWeekIndex(date){ return Math.floor((startOfDay(date)-BATTLE_EPOCH)/(7*DAY)); }
+function battleWordForDate(date){
+  const i=((battleWeekIndex(date)%BATTLE_WORDS.length)+BATTLE_WORDS.length)%BATTLE_WORDS.length;
+  return BATTLE_WORDS[i];
+}
+
+let battleViewWeek = null;   // null = aktuelle Woche
+async function renderBattle(){
+  const cur = battleWeekIndex(new Date());
+  const wk = battleViewWeek==null ? cur : battleViewWeek;
+  const word = BATTLE_WORDS[((wk%BATTLE_WORDS.length)+BATTLE_WORDS.length)%BATTLE_WORDS.length];
+  document.getElementById('galTitle').textContent = `Battle – Woche ${wk} · „${word}"`;
+  const bar=document.getElementById('galBar');
+  bar.innerHTML = `<button class="act" id="bPrev">‹ frühere</button> <button class="act" id="bNext">spätere ›</button> `+
+                  (wk===cur ? '<button class="act" id="bUpload">Mein Battle-Bild hochladen</button>' : '');
+  document.getElementById('bPrev').onclick=()=>{ battleViewWeek=wk-1; renderBattle(); };
+  document.getElementById('bNext').onclick=()=>{ if(wk<cur){ battleViewWeek=wk+1; renderBattle(); } };
+  const up=document.getElementById('bUpload');
+  if(up) up.onclick=async ()=>{ await uploadArtwork({mode:'battle', battleWeek:cur, battleWord:word}); renderBattle(); };
+  const grid=document.getElementById('galGrid'); grid.innerHTML='Lädt…';
+  const rows=await fetchEntries(`mode=eq.battle&battle_week=eq.${wk}&order=created_at.desc&limit=200`);
+  grid.innerHTML=''; if(!rows.length) grid.innerHTML='<p style="color:#ccc">Diese Woche noch keine Bilder.</p>';
+  rows.forEach(e=>grid.appendChild(galCard(e)));
+  galOverlay.style.display='block';
+}
+document.getElementById('battleBtn').addEventListener('click', ()=>{ battleViewWeek=null; renderBattle(); });
+
+//------------------------------------------------------------------
 // Self-Tests (nur bei #selftest) – reine Logik, Ausgabe in Konsole
 //------------------------------------------------------------------
 function runSelfTests(){
@@ -1585,6 +1621,17 @@ function runSelfTests(){
   ok('sketchRecord motif', rec.motif===S.bg);
   ok('sketchRecord blobs', rec.thumb==='THUMB' && rec.paint==='PAINT');
   ok('sketchRecord view copy', rec.view.scale===view.scale && rec.view!==view);
+
+  // Battle: Wochenindex springt am Freitag, Wort deterministisch
+  const epoch = new Date(BATTLE_EPOCH);
+  ok('battle week 0 am Epoch', battleWeekIndex(epoch)===0);
+  const donnerstag = new Date(BATTLE_EPOCH + 6*864e5 - 1);   // kurz vor nächstem Freitag
+  ok('battle week 0 bis Do', battleWeekIndex(donnerstag)===0);
+  const naechsterFr = new Date(BATTLE_EPOCH + 7*864e5);
+  ok('battle week 1 am nächsten Fr', battleWeekIndex(naechsterFr)===1);
+  ok('battleWord deterministisch', battleWordForDate(epoch)===BATTLE_WORDS[0]);
+  ok('battleWord in Liste', BATTLE_WORDS.includes(battleWordForDate(new Date(BATTLE_EPOCH + 100*864e5))));
+  ok('alle Wörter max 5', BATTLE_WORDS.every(w=>w.length<=5));
 
   console.log(`Self-Tests: ${pass} pass, ${fail} fail`);
   const el=document.getElementById('status'); if(el) el.textContent=`Self-Tests: ${pass} pass, ${fail} fail`;
