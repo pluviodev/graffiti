@@ -231,6 +231,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10M8 10l4 4 4-4"/><path d="M5 19h14"/></svg></button>
       <button class="act iconbtn" id="fsBtn" title="Vollbild">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button class="act iconbtn" id="resetView" title="Ansicht zurücksetzen (1:1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg></button>
     </div>
   </div>
 
@@ -280,6 +282,20 @@ function applyView(){
     `translate(${view.tx}px,${view.ty}px) scale(${view.scale})`;
 }
 function resetView(){ view.scale=1; view.tx=0; view.ty=0; applyView(); }
+
+// nächster Zoom-Faktor, geklemmt auf [1,6]
+function nextScale(cur, factor){ return clamp(cur*factor, 1, 6); }
+// zoomt die View um den Bildschirmpunkt (cx,cy) mit Faktor f
+function zoomAt(cx, cy, f){
+  const ns = nextScale(view.scale, f);
+  const factor = ns/view.scale;
+  const C = {x:baseCenter.x+view.tx, y:baseCenter.y+view.ty};   // aktueller Bühnen-Mittelpunkt
+  view.tx += (cx - C.x)*(1-factor);
+  view.ty += (cy - C.y)*(1-factor);
+  view.scale = ns;
+  if(view.scale<=1.001){ view.scale=1; view.tx=0; view.ty=0; }  // ganz raus -> zentrieren
+  applyView();
+}
 
 // Bühne auf Bildschirm einpassen (Seitenverhältnis halten)
 function fitStage(){
@@ -811,6 +827,7 @@ function handlePinch(){
 }
 
 preview.addEventListener('pointerdown', e=>{
+  if(e.button===1){ e.preventDefault(); panning=true; panLast={x:e.clientX,y:e.clientY}; preview.setPointerCapture(e.pointerId); return; }  // mittlere Taste = Pan, kein Malen
   e.preventDefault(); preview.setPointerCapture(e.pointerId);
   activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(activePointers.size>1){                    // zweiter Finger -> Zoom/Pan, evtl. Strich verwerfen
@@ -1350,6 +1367,40 @@ function boot(){
   requestAnimationFrame(loop);
 }
 boot();
+
+//------------------------------------------------------------------
+// Desktop-Zoom (Mausrad) + Pan (mittlere Maustaste)
+//------------------------------------------------------------------
+let panning=false, panLast=null;
+preview.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const f = e.deltaY < 0 ? 1.12 : 1/1.12;
+  zoomAt(e.clientX, e.clientY, f);
+}, {passive:false});
+addEventListener('pointermove', e=>{
+  if(!panning) return;
+  view.tx += e.clientX-panLast.x; view.ty += e.clientY-panLast.y;
+  panLast={x:e.clientX,y:e.clientY}; applyView();
+});
+addEventListener('pointerup', e=>{ if(e.button===1) panning=false; });
+document.getElementById('resetView').addEventListener('click', resetView);
+
+//------------------------------------------------------------------
+// Self-Tests (nur bei #selftest) – reine Logik, Ausgabe in Konsole
+//------------------------------------------------------------------
+function runSelfTests(){
+  let pass=0, fail=0;
+  const ok=(name,cond)=>{ if(cond){pass++; console.log('PASS',name);} else {fail++; console.error('FAIL',name);} };
+
+  // nextScale: clamp auf [1,6], multiplikativ
+  ok('nextScale in-range', nextScale(2, 1.5) === 3);
+  ok('nextScale clamp max', nextScale(5, 2) === 6);
+  ok('nextScale clamp min', nextScale(1, 0.5) === 1);
+
+  console.log(`Self-Tests: ${pass} pass, ${fail} fail`);
+  const el=document.getElementById('status'); if(el) el.textContent=`Self-Tests: ${pass} pass, ${fail} fail`;
+}
+if(location.hash.includes('selftest')) addEventListener('load', runSelfTests);
 </script>
 </body>
 </html>
