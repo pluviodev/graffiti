@@ -541,35 +541,41 @@ function cageAlpha(){
   cx.fillStyle='#fff'; cx.beginPath(); maskPath(cx); cx.closePath(); cx.fill();
   return cx.getImageData(0,0,W,H).data;
 }
-function doFill(p){
-  const sx0=Math.round(p.x), sy0=Math.round(p.y);
-  if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
-  const thr=25 + (S.fillTol/100)*175;          // Alpha-Schwelle: darunter = "leer" (füllbar), darüber = Grenze
-  const a=px.getImageData(0,0,W,H).data;
-  const cage=cageAlpha();
-  const fillable=(x,y)=>{ const i=y*W+x; return a[i*4+3]<=thr && (!cage || cage[i*4+3]>0); };
-  if(!fillable(sx0,sy0)){
-    document.getElementById('status').innerHTML='<b>Füllen</b> · hier ist schon Farbe (oder außerhalb des Käfigs) – tippe in eine freie Fläche';
-    return;
-  }
-  // Scanline-Flood-Fill: sammelt die zusammenhängende freie Fläche bis zu den Linien / zum Käfigrand
-  const mask=new Uint8Array(W*H);
-  const stack=[sx0,sy0];
+// Echter Farbeimer: flutet die zusammenhängende Fläche ähnlicher FARBE ab (sx,sy),
+// nicht nur leere Zonen. RGBA-Summenabstand <= tol zählt als "gleiche Fläche".
+// allow(x,y) (optional) begrenzt auf den Käfig. Reine Funktion -> testbar.
+function floodRegion(data, w, h, sx, sy, tol, allow){
+  const mask=new Uint8Array(w*h);
+  const si=(sy*w+sx)*4, sr=data[si], sg=data[si+1], sb=data[si+2], sa=data[si+3];
+  const match=(x,y)=>{ const i=y*w+x; if(mask[i]) return false; if(allow && !allow(x,y)) return false;
+    const j=i*4; return (Math.abs(data[j]-sr)+Math.abs(data[j+1]-sg)+Math.abs(data[j+2]-sb)+Math.abs(data[j+3]-sa))<=tol; };
+  const stack=[sx,sy];
   while(stack.length){
     const y=stack.pop(), x=stack.pop();
-    let nx=x;
-    while(nx>=0 && !mask[y*W+nx] && fillable(nx,y)) nx--;
-    nx++;
+    let nx=x; while(nx>=0 && match(nx,y)) nx--; nx++;
     let up=false, dn=false;
-    while(nx<W && !mask[y*W+nx] && fillable(nx,y)){
-      mask[y*W+nx]=1;
-      if(y>0){ const f=!mask[(y-1)*W+nx] && fillable(nx,y-1);
-        if(f&&!up){ stack.push(nx,y-1); up=true; } else if(!f) up=false; }
-      if(y<H-1){ const f=!mask[(y+1)*W+nx] && fillable(nx,y+1);
-        if(f&&!dn){ stack.push(nx,y+1); dn=true; } else if(!f) dn=false; }
+    while(nx<w && match(nx,y)){
+      mask[y*w+nx]=1;
+      if(y>0){ const f=match(nx,y-1); if(f&&!up){ stack.push(nx,y-1); up=true; } else if(!f) up=false; }
+      if(y<h-1){ const f=match(nx,y+1); if(f&&!dn){ stack.push(nx,y+1); dn=true; } else if(!f) dn=false; }
       nx++;
     }
   }
+  return mask;
+}
+
+function doFill(p){
+  const sx0=Math.round(p.x), sy0=Math.round(p.y);
+  if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
+  const tol = 20 + (S.fillTol/100)*400;        // Farbabstand-Toleranz (|dR|+|dG|+|dB|+|dA|, 0..1020)
+  const a=px.getImageData(0,0,W,H).data;
+  const cage=cageAlpha();
+  if(cage && cage[(sy0*W+sx0)*4+3]===0){
+    document.getElementById('status').innerHTML='<b>Füllen</b> · außerhalb des Käfigs – tippe innen';
+    return;
+  }
+  const allow = cage ? (x,y)=>cage[(y*W+x)*4+3]>0 : null;
+  const mask = floodRegion(a, W, H, sx0, sy0, tol, allow);
   // Füll-Ebene in der aktuellen Farbe aufbauen (harte Pixelmaske)
   const fc=document.createElement('canvas'); fc.width=W; fc.height=H;
   const fx=fc.getContext('2d');
@@ -577,14 +583,11 @@ function doFill(p){
   const [rr,gg,bb]=hexToRgb(S.color);
   for(let i=0;i<W*H;i++){ if(mask[i]){ const j=i*4; fd[j]=rr; fd[j+1]=gg; fd[j+2]=bb; fd[j+3]=255; } }
   fx.putImageData(fimg,0,0);
-  // Aufbringen: HINTER die vorhandene Farbe (Outline bleibt oben) + leichter Weichzeichner = saubere Kanten
   pushUndo();
-  px.save();
-  px.globalCompositeOperation='destination-over';
-  px.filter='blur(0.7px)';
-  px.drawImage(fc,0,0);
-  px.filter='none';
-  px.restore();
+  // 1) alte Farbe in der Region entfernen (ermöglicht Umfärben)
+  px.save(); px.globalCompositeOperation='destination-out'; px.drawImage(fc,0,0); px.restore();
+  // 2) neue Farbe HINTER die verbleibende Farbe (Linien bleiben oben) + weiche Kante
+  px.save(); px.globalCompositeOperation='destination-over'; px.filter='blur(0.7px)'; px.drawImage(fc,0,0); px.filter='none'; px.restore();
   drawPreview(); updateStatus();
 }
 
@@ -1686,6 +1689,15 @@ function runSelfTests(){
   ok('tally null votes (a)', ranked[2].id==='a' && ranked[2].voteCount===0);
   ok('hasVoted true', hasVoted(vrows,'d1')===true);
   ok('hasVoted false', hasVoted(vrows,'dX')===false);
+
+  // Farbeimer: flutet nach Farbe, stoppt an Linien, re-flutet gefüllte Flächen
+  const fd0=new Uint8ClampedArray(5*4);
+  const setpx=(i,r,g,b,al)=>{ fd0[i*4]=r; fd0[i*4+1]=g; fd0[i*4+2]=b; fd0[i*4+3]=al; };
+  setpx(0,0,0,0,0); setpx(1,0,0,0,0); setpx(2,0,0,0,255); setpx(3,255,0,0,255); setpx(4,255,0,0,255);
+  const mLeer=floodRegion(fd0,5,1,0,0,100,null);
+  ok('flood leer 0,1', mLeer[0]===1 && mLeer[1]===1 && mLeer[2]===0);
+  const mRot=floodRegion(fd0,5,1,3,0,100,null);
+  ok('flood re-flutet Rot', mRot[3]===1 && mRot[4]===1 && mRot[2]===0);
 
   console.log(`Self-Tests: ${pass} pass, ${fail} fail`);
   const el=document.getElementById('status'); if(el) el.textContent=`Self-Tests: ${pass} pass, ${fail} fail`;
