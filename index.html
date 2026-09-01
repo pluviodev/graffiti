@@ -240,6 +240,12 @@
       <button class="act" id="saveSketchBtn">Speichern unter…</button>
       <button class="act" id="mySketchesBtn">Meine Skizzen</button>
     </div>
+
+    <div class="grp">
+      <label>Galerie</label>
+      <button class="act" id="hofBtn">Hall of Fame</button>
+      <button class="act" id="battleBtn">Battle</button>
+    </div>
   </div>
 
   <div id="stageWrap">
@@ -1528,6 +1534,40 @@ async function uploadArtwork({mode, battleWeek=null, battleWord=null}){
 }
 
 //------------------------------------------------------------------
+// Galerie (Hall of Fame + Battle teilen sich Overlay & Karten)
+//------------------------------------------------------------------
+async function fetchEntries(qs){
+  const res = await fetch(`${SUPA.url}/rest/v1/entries?${qs}`, {
+    headers:{ apikey:SUPA.anon, Authorization:`Bearer ${SUPA.anon}` },
+  });
+  if(!res.ok) return [];
+  return res.json();
+}
+const galOverlay=document.getElementById('galleryOverlay');
+document.getElementById('galClose').addEventListener('click', ()=>galOverlay.style.display='none');
+
+function galCard(e){
+  const card=document.createElement('div'); card.style.cssText='width:230px;background:#1c1c1c;border-radius:8px;overflow:hidden;color:#fff;font-size:13px';
+  const img=document.createElement('img'); img.src=publicUrl(e.image_path); img.style.cssText='width:100%;display:block;cursor:pointer';
+  img.onclick=()=>window.open(publicUrl(e.image_path),'_blank');
+  const cap=document.createElement('div'); cap.style.padding='6px 8px';
+  cap.textContent = e.battle_word ? `${e.nickname} · „${e.battle_word}"` : `${e.nickname} · ${e.motif||''}`;
+  card.append(img,cap); return card;
+}
+
+async function renderHof(){
+  document.getElementById('galTitle').textContent='Hall of Fame';
+  document.getElementById('galBar').innerHTML='<button class="act" id="hofUpload">Mein Bild hochladen</button>';
+  document.getElementById('hofUpload').onclick=async ()=>{ await uploadArtwork({mode:'hall'}); renderHof(); };
+  const grid=document.getElementById('galGrid'); grid.innerHTML='Lädt…';
+  const rows=await fetchEntries('mode=eq.hall&order=created_at.desc&limit=200');
+  grid.innerHTML=''; if(!rows.length) grid.innerHTML='<p style="color:#ccc">Noch keine Bilder.</p>';
+  rows.forEach(e=>grid.appendChild(galCard(e)));
+  galOverlay.style.display='block';
+}
+document.getElementById('hofBtn').addEventListener('click', renderHof);
+
+//------------------------------------------------------------------
 // Self-Tests (nur bei #selftest) – reine Logik, Ausgabe in Konsole
 //------------------------------------------------------------------
 function runSelfTests(){
@@ -1556,6 +1596,14 @@ if(location.hash.includes('selftest')) addEventListener('load', runSelfTests);
     <button class="act" id="sketchClose" style="float:right">Schließen</button>
     <h2 style="color:#fff">Meine Skizzen</h2>
     <div id="sketchGrid" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
+  </div>
+</div>
+<div id="galleryOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow:auto;padding:24px;">
+  <div style="max-width:1000px;margin:0 auto;">
+    <button class="act" id="galClose" style="float:right">Schließen</button>
+    <h2 id="galTitle" style="color:#fff"></h2>
+    <div id="galBar" style="margin:8px 0"></div>
+    <div id="galGrid" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
   </div>
 </div>
 </body>
