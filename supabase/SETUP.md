@@ -49,9 +49,11 @@ create policy "votes insert" on public.votes for insert with check (true);
 - `SUPABASE_URL` und `SUPABASE_SERVICE_ROLE_KEY` sind in Edge Functions automatisch verfügbar.
 - „Verify JWT" auf Standard (an) lassen — der Client schickt den anon-Key als `Authorization`.
 
-## 5. Secret für den Upload-Code
-- **Edge Functions → (Projekt) → Secrets** (bzw. Project Settings → Edge Functions → Secrets):
-  - `UPLOAD_CODE` = `<dein geheimer Code>`  (nicht im Chat teilen; hier direkt setzen)
+## 5. Secrets (Edge Functions → Secrets bzw. Project Settings → Edge Functions → Secrets)
+- `UPLOAD_CODE` = `<Community-Upload-Code>`  (zum Hochladen; nicht im Chat teilen)
+- `ADMIN_CODE`  = `<geheimer Admin-Code>`  (NUR jh; zum Löschen von Galerie-Bildern via 🗑)
+
+Beide Werte nur hier im Dashboard setzen, niemals in Client-Code/Chat. Nach dem Ändern von Function-Code (`index.ts`) neu **deployen**.
 
 ## 6. Werte an Claude geben (für Task 6)
 Nur diese zwei (beide public-safe):

@@ -1579,6 +1579,26 @@ async function fetchEntries(qs){
 const galOverlay=document.getElementById('galleryOverlay');
 document.getElementById('galClose').addEventListener('click', ()=>galOverlay.style.display='none');
 
+// Moderation: Admin-Code (nur für die Session gemerkt), Löschen über die Edge Function
+let adminCode = null;
+async function deleteEntry(id, rerender){
+  if(!confirm('Dieses Bild wirklich löschen?')) return;
+  const res = await fetch(`${SUPA.url}/functions/v1/submit`, {
+    method:'POST',
+    headers:{ 'content-type':'application/json', 'Authorization':`Bearer ${SUPA.anon}` },
+    body: JSON.stringify({ action:'delete', code:adminCode, id }),
+  });
+  if(res.status===403){ alert('Falscher Admin-Code.'); adminCode=null; }
+  else if(!res.ok){ alert('Löschen fehlgeschlagen.'); }
+  rerender();
+}
+// „Moderieren"-Button-HTML für die Galerie-Leiste (fragt einmalig den Admin-Code ab)
+function modBtnHtml(){ return `<button class="act" id="modBtn">${adminCode?'✓ Moderieren an':'Moderieren'}</button>`; }
+function wireModBtn(rerender){
+  const b=document.getElementById('modBtn'); if(!b) return;
+  b.onclick=()=>{ adminCode = prompt('Admin-Code (zum Löschen):', adminCode||'') || null; rerender(); };
+}
+
 function galCard(e, opts){
   opts=opts||{};
   const card=document.createElement('div'); card.style.cssText='width:230px;background:#1c1c1c;border-radius:8px;overflow:hidden;color:#fff;font-size:13px';
@@ -1594,17 +1614,23 @@ function galCard(e, opts){
     if(opts.canVote){ const b=document.createElement('button'); b.className='act'; b.textContent='Voten'; b.onclick=()=>opts.onVote(e); vbar.appendChild(b); }
     card.append(vbar);
   }
+  if(opts.canDelete){
+    const del=document.createElement('button'); del.className='act'; del.textContent='🗑 löschen';
+    del.style.cssText='margin:0 8px 8px'; del.onclick=()=>opts.onDelete(e);
+    card.append(del);
+  }
   return card;
 }
 
 async function renderHof(){
   document.getElementById('galTitle').textContent='Hall of Fame';
-  document.getElementById('galBar').innerHTML='<button class="act" id="hofUpload">Mein Bild hochladen</button>';
+  document.getElementById('galBar').innerHTML='<button class="act" id="hofUpload">Mein Bild hochladen</button> '+modBtnHtml();
   document.getElementById('hofUpload').onclick=async ()=>{ await uploadArtwork({mode:'hall'}); renderHof(); };
+  wireModBtn(renderHof);
   const grid=document.getElementById('galGrid'); grid.innerHTML='Lädt…';
   const rows=await fetchEntries('mode=eq.hall&order=created_at.desc&limit=200');
   grid.innerHTML=''; if(!rows.length) grid.innerHTML='<p style="color:#ccc">Noch keine Bilder.</p>';
-  rows.forEach(e=>grid.appendChild(galCard(e)));
+  rows.forEach(e=>grid.appendChild(galCard(e, { canDelete:!!adminCode, onDelete:(entry)=>deleteEntry(entry.id, renderHof) })));
   galOverlay.style.display='block';
 }
 document.getElementById('hofBtn').addEventListener('click', renderHof);
@@ -1658,9 +1684,10 @@ async function renderBattle(){
   document.getElementById('galTitle').textContent = `Battle – Woche ${wk} · „${word}"`;
   const bar=document.getElementById('galBar');
   bar.innerHTML = `<button class="act" id="bPrev">‹ frühere</button> <button class="act" id="bNext">spätere ›</button> `+
-                  (wk===cur ? '<button class="act" id="bUpload">Mein Battle-Bild hochladen</button>' : '');
+                  (wk===cur ? '<button class="act" id="bUpload">Mein Battle-Bild hochladen</button> ' : '')+modBtnHtml();
   document.getElementById('bPrev').onclick=()=>{ battleViewWeek=wk-1; renderBattle(); };
   document.getElementById('bNext').onclick=()=>{ if(wk<cur){ battleViewWeek=wk+1; renderBattle(); } };
+  wireModBtn(renderBattle);
   const up=document.getElementById('bUpload');
   if(up) up.onclick=async ()=>{ await uploadArtwork({mode:'battle', battleWeek:cur, battleWord:word}); renderBattle(); };
   const grid=document.getElementById('galGrid'); grid.innerHTML='Lädt…';
@@ -1675,6 +1702,8 @@ async function renderBattle(){
     showVotes:true,
     canVote:!voted,
     onVote:async (entry)=>{ const okv=await castVote(entry.id, wk); if(!okv) alert('Du hast diese Woche schon gevotet.'); renderBattle(); },
+    canDelete:!!adminCode,
+    onDelete:(entry)=>deleteEntry(entry.id, renderBattle),
   })));
   galOverlay.style.display='block';
 }
