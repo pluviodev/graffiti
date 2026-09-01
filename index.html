@@ -1558,20 +1558,36 @@ const publicUrl = p => `${SUPA.url}/storage/v1/object/public/artworks/${p}`;
 function getNick(){ return localStorage.getItem('hs_nick')||''; }
 function setNick(v){ localStorage.setItem('hs_nick', v); }
 
-// Hintergrund + Paint zu EINEM PNG (DataURL)
-function flattenPNG(){
-  const c=document.createElement('canvas'); c.width=W; c.height=H;
-  const cx=c.getContext('2d'); cx.drawImage(bg,0,0); cx.drawImage(paint,0,0);
-  return c.toDataURL('image/png');
+// Fertiges Bild von der Festplatte wählen -> als PNG-DataURL (max 1600px, seitenverhältnis-treu)
+function pickImagePng(){
+  return new Promise(res=>{
+    const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+    inp.onchange=()=>{
+      const f=inp.files && inp.files[0]; if(!f){ res(null); return; }
+      const img=new Image();
+      img.onload=()=>{
+        const max=1600, sc=Math.min(1, max/Math.max(img.width,img.height));
+        const w=Math.max(1,Math.round(img.width*sc)), h=Math.max(1,Math.round(img.height*sc));
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        res(c.toDataURL('image/png'));
+      };
+      img.onerror=()=>res(null);
+      img.src=URL.createObjectURL(f);
+    };
+    inp.click();
+  });
 }
 
 async function uploadArtwork({mode, battleWeek=null, battleWord=null}){
+  const imageBase64 = await pickImagePng();
+  if(!imageBase64) return;                      // keine Datei gewählt / abgebrochen
   const nickname = prompt('Dein Künstlername:', getNick());
   if(nickname===null) return;
   setNick(nickname);
   const code = prompt('Upload-Code:');
   if(!code) return;
-  const body = { code, imageBase64: flattenPNG(), nickname, mode, motif: S.bg, battleWeek, battleWord };
+  const body = { code, imageBase64, nickname, mode, motif:'', battleWeek, battleWord };
   const res = await fetch(`${SUPA.url}/functions/v1/submit`, {
     method:'POST',
     headers:{ 'content-type':'application/json', 'Authorization':`Bearer ${SUPA.anon}` },
