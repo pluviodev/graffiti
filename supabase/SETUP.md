@@ -21,6 +21,20 @@ create table public.entries (
 alter table public.entries enable row level security;
 create policy "public read" on public.entries for select using (true);
 -- KEIN insert-Policy für anon: Schreiben nur über Service-Rolle (Edge Function).
+
+-- Voting: 1 Vote pro Gerät pro Battle-Woche (Unique-Constraint erzwingt das serverseitig)
+create table public.votes (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  entry_id uuid not null references public.entries(id) on delete cascade,
+  device_id text not null,
+  battle_week int not null,
+  unique (device_id, battle_week)
+);
+alter table public.votes enable row level security;
+create policy "votes read"   on public.votes for select using (true);
+create policy "votes insert" on public.votes for insert with check (true);
+-- Kein update/delete für anon: ein Vote ist endgültig. Doppel-Votes blockt der Unique-Constraint (HTTP 409).
 ```
 
 ## 3. Storage-Bucket

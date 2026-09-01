@@ -1546,13 +1546,22 @@ async function fetchEntries(qs){
 const galOverlay=document.getElementById('galleryOverlay');
 document.getElementById('galClose').addEventListener('click', ()=>galOverlay.style.display='none');
 
-function galCard(e){
+function galCard(e, opts){
+  opts=opts||{};
   const card=document.createElement('div'); card.style.cssText='width:230px;background:#1c1c1c;border-radius:8px;overflow:hidden;color:#fff;font-size:13px';
   const img=document.createElement('img'); img.src=publicUrl(e.image_path); img.style.cssText='width:100%;display:block;cursor:pointer';
   img.onclick=()=>window.open(publicUrl(e.image_path),'_blank');
   const cap=document.createElement('div'); cap.style.padding='6px 8px';
   cap.textContent = e.battle_word ? `${e.nickname} · „${e.battle_word}"` : `${e.nickname} · ${e.motif||''}`;
-  card.append(img,cap); return card;
+  card.append(img,cap);
+  if(opts.showVotes){
+    const vbar=document.createElement('div'); vbar.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:0 8px 8px';
+    const cnt=document.createElement('span'); cnt.textContent=`♥ ${e.voteCount||0}`;
+    vbar.appendChild(cnt);
+    if(opts.canVote){ const b=document.createElement('button'); b.className='act'; b.textContent='Voten'; b.onclick=()=>opts.onVote(e); vbar.appendChild(b); }
+    card.append(vbar);
+  }
+  return card;
 }
 
 async function renderHof(){
@@ -1582,6 +1591,32 @@ function battleWordForDate(date){
   return BATTLE_WORDS[i];
 }
 
+// --- Voting (1 Vote pro Gerät pro Battle-Woche) ---
+function deviceId(){
+  let id=localStorage.getItem('hs_device');
+  if(!id){ id=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random()); localStorage.setItem('hs_device', id); }
+  return id;
+}
+async function fetchVotes(week){
+  const res=await fetch(`${SUPA.url}/rest/v1/votes?battle_week=eq.${week}&select=entry_id,device_id`, {
+    headers:{ apikey:SUPA.anon, Authorization:`Bearer ${SUPA.anon}` } });
+  if(!res.ok) return [];
+  return res.json();
+}
+async function castVote(entryId, week){
+  const res=await fetch(`${SUPA.url}/rest/v1/votes`, {
+    method:'POST',
+    headers:{ apikey:SUPA.anon, Authorization:`Bearer ${SUPA.anon}`, 'content-type':'application/json', Prefer:'return=minimal' },
+    body: JSON.stringify({ entry_id:entryId, device_id:deviceId(), battle_week:week }) });
+  return res.ok;   // 409 (Unique-Verletzung) -> false = schon gevotet
+}
+// reine Logik: Votes je Bild zählen und absteigend sortieren (Gleichstand: bestehende Reihenfolge)
+function tallyVotes(entries, voteRows){
+  const counts={}; voteRows.forEach(v=>{ counts[v.entry_id]=(counts[v.entry_id]||0)+1; });
+  return entries.map(e=>({...e, voteCount:counts[e.id]||0})).sort((a,b)=>b.voteCount-a.voteCount);
+}
+function hasVoted(voteRows, devId){ return voteRows.some(v=>v.device_id===devId); }
+
 let battleViewWeek = null;   // null = aktuelle Woche
 async function renderBattle(){
   const cur = battleWeekIndex(new Date());
@@ -1596,9 +1631,18 @@ async function renderBattle(){
   const up=document.getElementById('bUpload');
   if(up) up.onclick=async ()=>{ await uploadArtwork({mode:'battle', battleWeek:cur, battleWord:word}); renderBattle(); };
   const grid=document.getElementById('galGrid'); grid.innerHTML='Lädt…';
-  const rows=await fetchEntries(`mode=eq.battle&battle_week=eq.${wk}&order=created_at.desc&limit=200`);
-  grid.innerHTML=''; if(!rows.length) grid.innerHTML='<p style="color:#ccc">Diese Woche noch keine Bilder.</p>';
-  rows.forEach(e=>grid.appendChild(galCard(e)));
+  const [rows, votes] = await Promise.all([
+    fetchEntries(`mode=eq.battle&battle_week=eq.${wk}&order=created_at.desc&limit=200`),
+    fetchVotes(wk),
+  ]);
+  const ranked = tallyVotes(rows, votes);
+  const voted = hasVoted(votes, deviceId());
+  grid.innerHTML=''; if(!ranked.length) grid.innerHTML='<p style="color:#ccc">Diese Woche noch keine Bilder.</p>';
+  ranked.forEach(e=>grid.appendChild(galCard(e, {
+    showVotes:true,
+    canVote:!voted,
+    onVote:async (entry)=>{ const okv=await castVote(entry.id, wk); if(!okv) alert('Du hast diese Woche schon gevotet.'); renderBattle(); },
+  })));
   galOverlay.style.display='block';
 }
 document.getElementById('battleBtn').addEventListener('click', ()=>{ battleViewWeek=null; renderBattle(); });
@@ -1632,6 +1676,16 @@ function runSelfTests(){
   ok('battleWord deterministisch', battleWordForDate(epoch)===BATTLE_WORDS[0]);
   ok('battleWord in Liste', BATTLE_WORDS.includes(battleWordForDate(new Date(BATTLE_EPOCH + 100*864e5))));
   ok('alle Wörter max 5', BATTLE_WORDS.every(w=>w.length<=5));
+
+  // Voting: Tally zählt & sortiert absteigend, hasVoted erkennt eigenes Gerät
+  const ents=[{id:'a'},{id:'b'},{id:'c'}];
+  const vrows=[{entry_id:'b',device_id:'d1'},{entry_id:'b',device_id:'d2'},{entry_id:'c',device_id:'d3'}];
+  const ranked=tallyVotes(ents, vrows);
+  ok('tally sortiert (b zuerst)', ranked[0].id==='b' && ranked[0].voteCount===2);
+  ok('tally zweiter (c)', ranked[1].id==='c' && ranked[1].voteCount===1);
+  ok('tally null votes (a)', ranked[2].id==='a' && ranked[2].voteCount===0);
+  ok('hasVoted true', hasVoted(vrows,'d1')===true);
+  ok('hasVoted false', hasVoted(vrows,'dX')===false);
 
   console.log(`Self-Tests: ${pass} pass, ${fail} fail`);
   const el=document.getElementById('status'); if(el) el.textContent=`Self-Tests: ${pass} pass, ${fail} fail`;
