@@ -286,6 +286,20 @@
     <div id="galGrid" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
   </div>
 </div>
+<div id="whatsNew" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;width:min(300px,calc(100vw - 24px));box-sizing:border-box;background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:16px;font-size:14px;line-height:1.5;">
+  <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
+  <ul style="margin:0 0 14px;padding-left:18px;">
+    <li>🔍 <b>Zoom & Pan</b> — Mausrad zoomt, mittlere Maustaste schiebt</li>
+    <li>✨ <b>Clean-Schalter</b> — Overspray aus für saubere Kanten</li>
+    <li>💀 <b>Ghul Spezial Cap</b> — der dünnste Cap überhaupt</li>
+    <li>🪣 <b>Echter Farbeimer</b> — Flächen beliebig umfärben</li>
+    <li>🎨 <b>Eigene Farbslots</b> — deine gewählten Farben bleiben</li>
+    <li>💾 <b>Speichern & Weitermachen</b> — mehrere Skizzen lokal</li>
+    <li>🏆 <b>Hall of Fame</b> — lad deine Werke hoch, für alle sichtbar</li>
+    <li>⚔️ <b>Battle-Modus</b> — jede Woche ein neues Wort, malen & voten</li>
+  </ul>
+  <button class="act" id="whatsNewBtn" style="width:100%;font-size:15px;padding:8px;">💣 Bombe!</button>
+</div>
 
 <script>
 "use strict";
@@ -1708,6 +1722,13 @@ async function renderBattle(){
   galOverlay.style.display='block';
 }
 document.getElementById('battleBtn').addEventListener('click', ()=>{ battleViewWeek=null; renderBattle(); });
+
+// „Was ist neu"-Popup – einmal pro Gerät (Version hochzählen für neue Feature-Runden)
+(function(){
+  const wn=document.getElementById('whatsNew'); if(!wn) return;
+  if(!localStorage.getItem('hs_whatsnew_v1')) wn.style.display='block';
+  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v1','1'); wn.style.display='none'; });
+})();
 
 //------------------------------------------------------------------
 // Self-Tests (nur bei #selftest) – reine Logik, Ausgabe in Konsole
