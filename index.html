@@ -150,6 +150,7 @@
     <div class="grp">
       <label>Cap</label>
       <select id="cap"></select>
+      <label class="dl" title="Aus = feiner Nebel/Overspray außerhalb der Linie. Ein = cleane Kanten."><input type="checkbox" id="cleanEdges"> Clean</label>
     </div>
 
     <div class="grp" id="dagGrp" style="display:none">
@@ -230,6 +231,20 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10M8 10l4 4 4-4"/><path d="M5 19h14"/></svg></button>
       <button class="act iconbtn" id="fsBtn" title="Vollbild">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button class="act iconbtn" id="resetView" title="Ansicht zurücksetzen (1:1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg></button>
+    </div>
+
+    <div class="grp">
+      <label>Skizzen</label>
+      <button class="act" id="saveSketchBtn">Speichern unter…</button>
+      <button class="act" id="mySketchesBtn">Meine Skizzen</button>
+    </div>
+
+    <div class="grp">
+      <label>Galerie</label>
+      <button class="act" id="hofBtn">Hall of Fame</button>
+      <button class="act" id="battleBtn">Battle</button>
     </div>
   </div>
 
@@ -280,6 +295,20 @@ function applyView(){
 }
 function resetView(){ view.scale=1; view.tx=0; view.ty=0; applyView(); }
 
+// nächster Zoom-Faktor, geklemmt auf [1,6]
+function nextScale(cur, factor){ return clamp(cur*factor, 1, 6); }
+// zoomt die View um den Bildschirmpunkt (cx,cy) mit Faktor f
+function zoomAt(cx, cy, f){
+  const ns = nextScale(view.scale, f);
+  const factor = ns/view.scale;
+  const C = {x:baseCenter.x+view.tx, y:baseCenter.y+view.ty};   // aktueller Bühnen-Mittelpunkt
+  view.tx += (cx - C.x)*(1-factor);
+  view.ty += (cy - C.y)*(1-factor);
+  view.scale = ns;
+  if(view.scale<=1.001){ view.scale=1; view.tx=0; view.ty=0; }  // ganz raus -> zentrieren
+  applyView();
+}
+
 // Bühne auf Bildschirm einpassen (Seitenverhältnis halten)
 function fitStage(){
   const wrap = document.getElementById('stageWrap');
@@ -300,6 +329,7 @@ addEventListener('resize', fitStage);
 //   density = Körnungsdichte, edge = Kantenhärte (1=hart), drip = Tropf-Neigung
 //------------------------------------------------------------------
 const CAPS = {
+  ghul:       {label:'Ghul Spezial', radius:2,  spread:0.08, density:1.0, edge:0.98, drip:0.05},
   superskinny:{label:'Super Skinny', radius:4,  spread:0.15, density:1.0, edge:0.95, drip:0.10},
   skinny:     {label:'Skinny',       radius:8,  spread:0.25, density:1.0, edge:0.80, drip:0.20},
   medium:     {label:'Medium',       radius:16, spread:0.40, density:1.1, edge:0.55, drip:0.40},
@@ -312,6 +342,7 @@ Object.entries(CAPS).forEach(([k,c])=>{
   const o=document.createElement('option'); o.value=k; o.textContent=c.label; capSel.appendChild(o);
 });
 capSel.value='fat';
+document.getElementById('cleanEdges').addEventListener('change', e=>{ S.cleanEdges = e.target.checked; });
 
 //------------------------------------------------------------------
 // State
@@ -324,6 +355,7 @@ const S = {
   metalMode:'fill',      // gemerkter Modus für die Metallic-Chips ('fill' | 'shimmer')
   pressure:0.55,
   cap:'fat',
+  cleanEdges:false,      // true = kein Overspray/Gedrizzel außerhalb des Kerns (cleane Kanten)
   // Dagger (schräge Dose): Modus + Cone-Parameter
   dagMode:'free',        // 'free' = Freihand (feste Rad-Richtung), 'curve' = gebogene Bahn
   coneLen:120,           // Reichweite des Nebels (px)
@@ -424,7 +456,8 @@ function speckle(x,y,r){
   noteY(y-r); noteY(y+r);
   const cap=CAPS[S.cap], p=S.pressure, cf=coreFrac();
   const n=Math.round(r*cap.density*(0.6+p*2.4));
-  const rimMax=r*(1.06+cap.spread*0.25), band=Math.max(1e-3, rimMax-r*cf);
+  const rimMax = S.cleanEdges ? r*cf*1.04 : r*(1.06+cap.spread*0.25);
+  const band=Math.max(1e-3, rimMax-r*cf);
   for(let i=0;i<n;i++){
     const ang=Math.random()*TAU, t=Math.random();
     const rad = r*cf + band*Math.pow(t, 0.55+cap.edge*1.0);
@@ -487,6 +520,7 @@ function commitFullStroke(){
   const src=S.metal?metalStroke():strokeCv;
   withMask(px,()=>{ px.save(); px.globalAlpha=fullAlpha(); px.drawImage(src,0,0); px.restore(); });
   resetBuf(); pvx.clearRect(0,0,W,H); drawPreview();
+  scheduleAutoSave();
 }
 
 // Radierer (immer direkt, voll deckend entfernen)
@@ -507,35 +541,41 @@ function cageAlpha(){
   cx.fillStyle='#fff'; cx.beginPath(); maskPath(cx); cx.closePath(); cx.fill();
   return cx.getImageData(0,0,W,H).data;
 }
-function doFill(p){
-  const sx0=Math.round(p.x), sy0=Math.round(p.y);
-  if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
-  const thr=25 + (S.fillTol/100)*175;          // Alpha-Schwelle: darunter = "leer" (füllbar), darüber = Grenze
-  const a=px.getImageData(0,0,W,H).data;
-  const cage=cageAlpha();
-  const fillable=(x,y)=>{ const i=y*W+x; return a[i*4+3]<=thr && (!cage || cage[i*4+3]>0); };
-  if(!fillable(sx0,sy0)){
-    document.getElementById('status').innerHTML='<b>Füllen</b> · hier ist schon Farbe (oder außerhalb des Käfigs) – tippe in eine freie Fläche';
-    return;
-  }
-  // Scanline-Flood-Fill: sammelt die zusammenhängende freie Fläche bis zu den Linien / zum Käfigrand
-  const mask=new Uint8Array(W*H);
-  const stack=[sx0,sy0];
+// Echter Farbeimer: flutet die zusammenhängende Fläche ähnlicher FARBE ab (sx,sy),
+// nicht nur leere Zonen. RGBA-Summenabstand <= tol zählt als "gleiche Fläche".
+// allow(x,y) (optional) begrenzt auf den Käfig. Reine Funktion -> testbar.
+function floodRegion(data, w, h, sx, sy, tol, allow){
+  const mask=new Uint8Array(w*h);
+  const si=(sy*w+sx)*4, sr=data[si], sg=data[si+1], sb=data[si+2], sa=data[si+3];
+  const match=(x,y)=>{ const i=y*w+x; if(mask[i]) return false; if(allow && !allow(x,y)) return false;
+    const j=i*4; return (Math.abs(data[j]-sr)+Math.abs(data[j+1]-sg)+Math.abs(data[j+2]-sb)+Math.abs(data[j+3]-sa))<=tol; };
+  const stack=[sx,sy];
   while(stack.length){
     const y=stack.pop(), x=stack.pop();
-    let nx=x;
-    while(nx>=0 && !mask[y*W+nx] && fillable(nx,y)) nx--;
-    nx++;
+    let nx=x; while(nx>=0 && match(nx,y)) nx--; nx++;
     let up=false, dn=false;
-    while(nx<W && !mask[y*W+nx] && fillable(nx,y)){
-      mask[y*W+nx]=1;
-      if(y>0){ const f=!mask[(y-1)*W+nx] && fillable(nx,y-1);
-        if(f&&!up){ stack.push(nx,y-1); up=true; } else if(!f) up=false; }
-      if(y<H-1){ const f=!mask[(y+1)*W+nx] && fillable(nx,y+1);
-        if(f&&!dn){ stack.push(nx,y+1); dn=true; } else if(!f) dn=false; }
+    while(nx<w && match(nx,y)){
+      mask[y*w+nx]=1;
+      if(y>0){ const f=match(nx,y-1); if(f&&!up){ stack.push(nx,y-1); up=true; } else if(!f) up=false; }
+      if(y<h-1){ const f=match(nx,y+1); if(f&&!dn){ stack.push(nx,y+1); dn=true; } else if(!f) dn=false; }
       nx++;
     }
   }
+  return mask;
+}
+
+function doFill(p){
+  const sx0=Math.round(p.x), sy0=Math.round(p.y);
+  if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
+  const tol = 20 + (S.fillTol/100)*400;        // Farbabstand-Toleranz (|dR|+|dG|+|dB|+|dA|, 0..1020)
+  const a=px.getImageData(0,0,W,H).data;
+  const cage=cageAlpha();
+  if(cage && cage[(sy0*W+sx0)*4+3]===0){
+    document.getElementById('status').innerHTML='<b>Füllen</b> · außerhalb des Käfigs – tippe innen';
+    return;
+  }
+  const allow = cage ? (x,y)=>cage[(y*W+x)*4+3]>0 : null;
+  const mask = floodRegion(a, W, H, sx0, sy0, tol, allow);
   // Füll-Ebene in der aktuellen Farbe aufbauen (harte Pixelmaske)
   const fc=document.createElement('canvas'); fc.width=W; fc.height=H;
   const fx=fc.getContext('2d');
@@ -543,14 +583,11 @@ function doFill(p){
   const [rr,gg,bb]=hexToRgb(S.color);
   for(let i=0;i<W*H;i++){ if(mask[i]){ const j=i*4; fd[j]=rr; fd[j+1]=gg; fd[j+2]=bb; fd[j+3]=255; } }
   fx.putImageData(fimg,0,0);
-  // Aufbringen: HINTER die vorhandene Farbe (Outline bleibt oben) + leichter Weichzeichner = saubere Kanten
   pushUndo();
-  px.save();
-  px.globalCompositeOperation='destination-over';
-  px.filter='blur(0.7px)';
-  px.drawImage(fc,0,0);
-  px.filter='none';
-  px.restore();
+  // 1) alte Farbe in der Region entfernen (ermöglicht Umfärben)
+  px.save(); px.globalCompositeOperation='destination-out'; px.drawImage(fc,0,0); px.restore();
+  // 2) neue Farbe HINTER die verbleibende Farbe (Linien bleiben oben) + weiche Kante
+  px.save(); px.globalCompositeOperation='destination-over'; px.filter='blur(0.7px)'; px.drawImage(fc,0,0); px.filter='none'; px.restore();
   drawPreview(); updateStatus();
 }
 
@@ -560,6 +597,7 @@ function doFill(p){
 function maybeSpawnDrip(x,y){
   const cap = CAPS[S.cap];
   if(S.tool!=='spray') return;
+  if(S.cleanEdges) return;   // cleane Kanten: keine Tropfen
   if(drips.length>18) return;
   const r = curR();
   // nur bei ruhiger Hand & je nach Druck/Cap – deutlich seltener, erst nach längerem Halten
@@ -805,6 +843,7 @@ function handlePinch(){
 }
 
 preview.addEventListener('pointerdown', e=>{
+  if(e.button===1){ e.preventDefault(); panning=true; panLast={x:e.clientX,y:e.clientY}; preview.setPointerCapture(e.pointerId); return; }  // mittlere Taste = Pan, kein Malen
   e.preventDefault(); preview.setPointerCapture(e.pointerId);
   activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(activePointers.size>1){                    // zweiter Finger -> Zoom/Pan, evtl. Strich verwerfen
@@ -1069,12 +1108,25 @@ const fillTolInp=document.getElementById('fillTol');
 if(fillTolInp) fillTolInp.addEventListener('input',()=>{ S.fillTol=+fillTolInp.value; });
 const colorInp=document.getElementById('color');
 colorInp.addEventListener('input',()=>{ S.color=colorInp.value; clearMetal(); markSwatch(); updateColorFab(); });
+colorInp.addEventListener('change',()=>{ addToPalette(colorInp.value); });   // finaler Pick -> in die persistente Palette
 
-const PALETTE=['#ff2d55','#ff9500','#ffdd00','#34c759','#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ff2d92','#ffffff','#000000','#8e8e93'];
+const DEFAULT_PALETTE=['#ff2d55','#ff9500','#ffdd00','#34c759','#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ff2d92','#ffffff','#000000','#8e8e93'];
+const PALETTE_MAX=12;
 const swWrap=document.getElementById('swatches');
-PALETTE.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
-  d.addEventListener('click',()=>{ S.color=c; colorInp.value=c; clearMetal(); markSwatch(); updateColorFab(); }); swWrap.appendChild(d); });
+function loadPalette(){ try{ const j=JSON.parse(localStorage.getItem('hs_palette')); if(Array.isArray(j)&&j.length) return j.slice(0,PALETTE_MAX); }catch(e){} return DEFAULT_PALETTE.slice(); }
+function savePalette(arr){ try{ localStorage.setItem('hs_palette', JSON.stringify(arr)); }catch(e){} }
+// reine MRU-Einfügung: neue Farbe nach vorn, Duplikate raus, auf cap begrenzt (überschreibt so nach&nach die Basics)
+function mruInsert(arr, c, cap){ const lc=c.toLowerCase(); return [c, ...arr.filter(x=>x.toLowerCase()!==lc)].slice(0,cap); }
+let palette=loadPalette();
+function renderSwatches(){
+  swWrap.innerHTML='';
+  palette.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
+    d.addEventListener('click',()=>{ S.color=c; colorInp.value=c; clearMetal(); markSwatch(); updateColorFab(); }); swWrap.appendChild(d); });
+  markSwatch();
+}
+function addToPalette(c){ palette=mruInsert(palette, c, PALETTE_MAX); savePalette(palette); renderSwatches(); }
 function markSwatch(){ document.querySelectorAll('.sw').forEach(s=>s.classList.toggle('sel', !S.metal && !!s.dataset.c && s.dataset.c.toLowerCase()===S.color.toLowerCase())); }
+renderSwatches();
 
 // --- Metallic: 3 Chips (Chrom/Gold/Kupfer) + Fill/Schimmer-Toggle ---
 function clearMetal(){ S.metal=null; markMetal(); }
@@ -1344,6 +1396,346 @@ function boot(){
   requestAnimationFrame(loop);
 }
 boot();
+
+//------------------------------------------------------------------
+// Desktop-Zoom (Mausrad) + Pan (mittlere Maustaste)
+//------------------------------------------------------------------
+let panning=false, panLast=null;
+preview.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const f = e.deltaY < 0 ? 1.12 : 1/1.12;
+  zoomAt(e.clientX, e.clientY, f);
+}, {passive:false});
+addEventListener('pointermove', e=>{
+  if(!panning) return;
+  view.tx += e.clientX-panLast.x; view.ty += e.clientY-panLast.y;
+  panLast={x:e.clientX,y:e.clientY}; applyView();
+});
+addEventListener('pointerup', e=>{ if(e.button===1) panning=false; });
+document.getElementById('resetView').addEventListener('click', resetView);
+
+//------------------------------------------------------------------
+// Lokales Speichern (IndexedDB)
+//------------------------------------------------------------------
+const AUTO_SLOT = '__auto__';
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open('hallSketcher', 1);
+    r.onupgradeneeded = ()=>{ r.result.createObjectStore('sketches', {keyPath:'id', autoIncrement:true}); };
+    r.onsuccess = ()=>res(r.result);
+    r.onerror = ()=>rej(r.error);
+  });
+}
+function idbTx(db, mode){ return db.transaction('sketches', mode).objectStore('sketches'); }
+function idbReq(req){ return new Promise((res,rej)=>{ req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); }); }
+
+// reiner Datensatz-Builder (testbar)
+function sketchRecord(name, thumbBlob, paintBlob){
+  return { name, motif:S.bg, view:{scale:view.scale, tx:view.tx, ty:view.ty}, updatedAt:Date.now(), thumb:thumbBlob, paint:paintBlob };
+}
+
+// aktuellen Paint-Layer als PNG-Blob
+function capturePaint(){ return new Promise(res=>paint.toBlob(res, 'image/png')); }
+// kleines Vorschaubild (Hintergrund + Paint, 200px breit)
+function captureThumb(){
+  const t=document.createElement('canvas'); t.width=200; t.height=Math.round(200*H/W);
+  const tx=t.getContext('2d'); tx.drawImage(bg,0,0,t.width,t.height); tx.drawImage(paint,0,0,t.width,t.height);
+  return new Promise(res=>t.toBlob(res,'image/png'));
+}
+
+async function saveSketch(name){
+  const db=await idbOpen();
+  const rec=sketchRecord(name, await captureThumb(), await capturePaint());
+  if(name===AUTO_SLOT){
+    const all=await idbReq(idbTx(db,'readonly').getAll());
+    const ex=all.find(s=>s.name===AUTO_SLOT);
+    if(ex) rec.id=ex.id;
+  }
+  await idbReq(idbTx(db,'readwrite').put(rec));
+}
+async function listSketches(){
+  const db=await idbOpen();
+  const all=await idbReq(idbTx(db,'readonly').getAll());
+  return all.filter(s=>s.name!==AUTO_SLOT).sort((a,b)=>b.updatedAt-a.updatedAt);
+}
+async function getAuto(){
+  const db=await idbOpen();
+  const all=await idbReq(idbTx(db,'readonly').getAll());
+  return all.find(s=>s.name===AUTO_SLOT)||null;
+}
+async function deleteSketch(id){ const db=await idbOpen(); await idbReq(idbTx(db,'readwrite').delete(id)); }
+
+// Skizze in die App laden: Motiv setzen, Paint-Layer wiederherstellen, View setzen
+async function applySketch(rec){
+  S.bg = rec.motif; setBackground(rec.motif);
+  await new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{ px.clearRect(0,0,W,H); px.drawImage(img,0,0,W,H); res(); };
+    img.src=URL.createObjectURL(rec.paint);
+  });
+  if(rec.view){ view.scale=rec.view.scale; view.tx=rec.view.tx; view.ty=rec.view.ty; applyView(); }
+  drawPreview();
+}
+
+// Auto-Save (debounced) nach jedem fertigen Strich
+let autoTimer=null;
+function scheduleAutoSave(){ clearTimeout(autoTimer); autoTimer=setTimeout(()=>saveSketch(AUTO_SLOT).catch(()=>{}), 1500); }
+
+// Weitermachen-Angebot beim Start
+addEventListener('load', async ()=>{
+  if(location.hash.includes('selftest')) return;
+  try{
+    const auto=await getAuto();
+    if(auto && confirm('Weitermachen, wo du warst?')) await applySketch(auto);
+  }catch(e){}
+});
+
+// Skizzen-UI
+document.getElementById('saveSketchBtn').addEventListener('click', async ()=>{
+  const name=prompt('Name der Skizze:'); if(!name) return;
+  await saveSketch(name); alert('Gespeichert.');
+});
+const sketchOverlay=document.getElementById('sketchOverlay');
+document.getElementById('sketchClose').addEventListener('click', ()=>sketchOverlay.style.display='none');
+document.getElementById('mySketchesBtn').addEventListener('click', async ()=>{
+  const grid=document.getElementById('sketchGrid'); grid.innerHTML='';
+  const list=await listSketches();
+  if(!list.length){ grid.innerHTML='<p style="color:#ccc">Noch keine Skizzen.</p>'; }
+  list.forEach(rec=>{
+    const card=document.createElement('div'); card.style.cssText='width:200px;background:#222;padding:8px;border-radius:8px;color:#fff;font-size:13px';
+    const img=document.createElement('img'); img.src=URL.createObjectURL(rec.thumb); img.style.cssText='width:100%;border-radius:4px;cursor:pointer';
+    img.onclick=async ()=>{ await applySketch(rec); sketchOverlay.style.display='none'; };
+    const t=document.createElement('div'); t.textContent=rec.name; t.style.margin='6px 0';
+    const del=document.createElement('button'); del.className='act'; del.textContent='Löschen';
+    del.onclick=async ()=>{ if(confirm('Löschen?')){ await deleteSketch(rec.id); card.remove(); } };
+    card.append(img,t,del); grid.appendChild(card);
+  });
+  sketchOverlay.style.display='block';
+});
+
+//------------------------------------------------------------------
+// Online (Supabase) – Config + Upload
+//------------------------------------------------------------------
+const SUPA = {
+  url:  'https://eztfvguqquhnmeolgwkv.supabase.co',
+  anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6dGZ2Z3VxcXVobm1lb2xnd2t2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNDYyOTcsImV4cCI6MjEwMzgyMjI5N30.yYFvuPymIUwRCUzOAow-1KIM_etjyYNLENaKFk7v-d0',  // anon public key (RLS-geschützt, gehört in den Client)
+};
+const publicUrl = p => `${SUPA.url}/storage/v1/object/public/artworks/${p}`;
+
+function getNick(){ return localStorage.getItem('hs_nick')||''; }
+function setNick(v){ localStorage.setItem('hs_nick', v); }
+
+// Hintergrund + Paint zu EINEM PNG (DataURL)
+function flattenPNG(){
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const cx=c.getContext('2d'); cx.drawImage(bg,0,0); cx.drawImage(paint,0,0);
+  return c.toDataURL('image/png');
+}
+
+async function uploadArtwork({mode, battleWeek=null, battleWord=null}){
+  const nickname = prompt('Dein Künstlername:', getNick());
+  if(nickname===null) return;
+  setNick(nickname);
+  const code = prompt('Upload-Code:');
+  if(!code) return;
+  const body = { code, imageBase64: flattenPNG(), nickname, mode, motif: S.bg, battleWeek, battleWord };
+  const res = await fetch(`${SUPA.url}/functions/v1/submit`, {
+    method:'POST',
+    headers:{ 'content-type':'application/json', 'Authorization':`Bearer ${SUPA.anon}` },
+    body: JSON.stringify(body),
+  });
+  if(res.status===403){ alert('Falscher Upload-Code.'); return; }
+  if(!res.ok){ alert('Upload fehlgeschlagen.'); return; }
+  alert('Hochgeladen!');
+}
+
+//------------------------------------------------------------------
+// Galerie (Hall of Fame + Battle teilen sich Overlay & Karten)
+//------------------------------------------------------------------
+async function fetchEntries(qs){
+  const res = await fetch(`${SUPA.url}/rest/v1/entries?${qs}`, {
+    headers:{ apikey:SUPA.anon, Authorization:`Bearer ${SUPA.anon}` },
+  });
+  if(!res.ok) return [];
+  return res.json();
+}
+const galOverlay=document.getElementById('galleryOverlay');
+document.getElementById('galClose').addEventListener('click', ()=>galOverlay.style.display='none');
+
+function galCard(e, opts){
+  opts=opts||{};
+  const card=document.createElement('div'); card.style.cssText='width:230px;background:#1c1c1c;border-radius:8px;overflow:hidden;color:#fff;font-size:13px';
+  const img=document.createElement('img'); img.src=publicUrl(e.image_path); img.style.cssText='width:100%;display:block;cursor:pointer';
+  img.onclick=()=>window.open(publicUrl(e.image_path),'_blank');
+  const cap=document.createElement('div'); cap.style.padding='6px 8px';
+  cap.textContent = e.battle_word ? `${e.nickname} · „${e.battle_word}"` : `${e.nickname} · ${e.motif||''}`;
+  card.append(img,cap);
+  if(opts.showVotes){
+    const vbar=document.createElement('div'); vbar.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:0 8px 8px';
+    const cnt=document.createElement('span'); cnt.textContent=`♥ ${e.voteCount||0}`;
+    vbar.appendChild(cnt);
+    if(opts.canVote){ const b=document.createElement('button'); b.className='act'; b.textContent='Voten'; b.onclick=()=>opts.onVote(e); vbar.appendChild(b); }
+    card.append(vbar);
+  }
+  return card;
+}
+
+async function renderHof(){
+  document.getElementById('galTitle').textContent='Hall of Fame';
+  document.getElementById('galBar').innerHTML='<button class="act" id="hofUpload">Mein Bild hochladen</button>';
+  document.getElementById('hofUpload').onclick=async ()=>{ await uploadArtwork({mode:'hall'}); renderHof(); };
+  const grid=document.getElementById('galGrid'); grid.innerHTML='Lädt…';
+  const rows=await fetchEntries('mode=eq.hall&order=created_at.desc&limit=200');
+  grid.innerHTML=''; if(!rows.length) grid.innerHTML='<p style="color:#ccc">Noch keine Bilder.</p>';
+  rows.forEach(e=>grid.appendChild(galCard(e)));
+  galOverlay.style.display='block';
+}
+document.getElementById('hofBtn').addEventListener('click', renderHof);
+
+//------------------------------------------------------------------
+// Battle – Wort der Woche (deterministisch, kein Server)
+//------------------------------------------------------------------
+const BATTLE_WORDS = ["KING","CROWN","STYLE","FRESH","BOMB","FLOW","WILD","FUNK","VIBE","DOPE","DRIP","FUME","TAGS","CITY","NEON","RIOT","ZONE","HYPE","WAVE","GLOW","FADE","EDGE","BOLD","GRIM","HALO","ICON","LOUD","MYTH","NOVA","OMEN","PULSE","QUAKE","REBEL","SMOKE","STORM","TOXIC","URBAN","VIRUS","BLAZE","CHAOS","CRAZE","FLASH","FROST","GHOST","GLYPH","HEIST","KAPOW","PRISM","ROGUE","SPARK","TITAN","VENOM"];
+// Fester Epoch-Freitag: Fr 2026-09-04, 00:00 lokale Zeit. (Monat 0-basiert -> 8 = September)
+const BATTLE_EPOCH = new Date(2026, 8, 4, 0, 0, 0, 0).getTime();
+const DAY = 864e5;
+function startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x.getTime(); }
+// Anzahl vollständiger 7-Tage-Blöcke seit dem Epoch-Freitag (wechselt Freitag 00:00)
+function battleWeekIndex(date){ return Math.floor((startOfDay(date)-BATTLE_EPOCH)/(7*DAY)); }
+function battleWordForDate(date){
+  const i=((battleWeekIndex(date)%BATTLE_WORDS.length)+BATTLE_WORDS.length)%BATTLE_WORDS.length;
+  return BATTLE_WORDS[i];
+}
+
+// --- Voting (1 Vote pro Gerät pro Battle-Woche) ---
+function deviceId(){
+  let id=localStorage.getItem('hs_device');
+  if(!id){ id=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random()); localStorage.setItem('hs_device', id); }
+  return id;
+}
+async function fetchVotes(week){
+  const res=await fetch(`${SUPA.url}/rest/v1/votes?battle_week=eq.${week}&select=entry_id,device_id`, {
+    headers:{ apikey:SUPA.anon, Authorization:`Bearer ${SUPA.anon}` } });
+  if(!res.ok) return [];
+  return res.json();
+}
+async function castVote(entryId, week){
+  const res=await fetch(`${SUPA.url}/rest/v1/votes`, {
+    method:'POST',
+    headers:{ apikey:SUPA.anon, Authorization:`Bearer ${SUPA.anon}`, 'content-type':'application/json', Prefer:'return=minimal' },
+    body: JSON.stringify({ entry_id:entryId, device_id:deviceId(), battle_week:week }) });
+  return res.ok;   // 409 (Unique-Verletzung) -> false = schon gevotet
+}
+// reine Logik: Votes je Bild zählen und absteigend sortieren (Gleichstand: bestehende Reihenfolge)
+function tallyVotes(entries, voteRows){
+  const counts={}; voteRows.forEach(v=>{ counts[v.entry_id]=(counts[v.entry_id]||0)+1; });
+  return entries.map(e=>({...e, voteCount:counts[e.id]||0})).sort((a,b)=>b.voteCount-a.voteCount);
+}
+function hasVoted(voteRows, devId){ return voteRows.some(v=>v.device_id===devId); }
+
+let battleViewWeek = null;   // null = aktuelle Woche
+async function renderBattle(){
+  const cur = battleWeekIndex(new Date());
+  const wk = battleViewWeek==null ? cur : battleViewWeek;
+  const word = BATTLE_WORDS[((wk%BATTLE_WORDS.length)+BATTLE_WORDS.length)%BATTLE_WORDS.length];
+  document.getElementById('galTitle').textContent = `Battle – Woche ${wk} · „${word}"`;
+  const bar=document.getElementById('galBar');
+  bar.innerHTML = `<button class="act" id="bPrev">‹ frühere</button> <button class="act" id="bNext">spätere ›</button> `+
+                  (wk===cur ? '<button class="act" id="bUpload">Mein Battle-Bild hochladen</button>' : '');
+  document.getElementById('bPrev').onclick=()=>{ battleViewWeek=wk-1; renderBattle(); };
+  document.getElementById('bNext').onclick=()=>{ if(wk<cur){ battleViewWeek=wk+1; renderBattle(); } };
+  const up=document.getElementById('bUpload');
+  if(up) up.onclick=async ()=>{ await uploadArtwork({mode:'battle', battleWeek:cur, battleWord:word}); renderBattle(); };
+  const grid=document.getElementById('galGrid'); grid.innerHTML='Lädt…';
+  const [rows, votes] = await Promise.all([
+    fetchEntries(`mode=eq.battle&battle_week=eq.${wk}&order=created_at.desc&limit=200`),
+    fetchVotes(wk),
+  ]);
+  const ranked = tallyVotes(rows, votes);
+  const voted = hasVoted(votes, deviceId());
+  grid.innerHTML=''; if(!ranked.length) grid.innerHTML='<p style="color:#ccc">Diese Woche noch keine Bilder.</p>';
+  ranked.forEach(e=>grid.appendChild(galCard(e, {
+    showVotes:true,
+    canVote:!voted,
+    onVote:async (entry)=>{ const okv=await castVote(entry.id, wk); if(!okv) alert('Du hast diese Woche schon gevotet.'); renderBattle(); },
+  })));
+  galOverlay.style.display='block';
+}
+document.getElementById('battleBtn').addEventListener('click', ()=>{ battleViewWeek=null; renderBattle(); });
+
+//------------------------------------------------------------------
+// Self-Tests (nur bei #selftest) – reine Logik, Ausgabe in Konsole
+//------------------------------------------------------------------
+function runSelfTests(){
+  let pass=0, fail=0;
+  const ok=(name,cond)=>{ if(cond){pass++; console.log('PASS',name);} else {fail++; console.error('FAIL',name);} };
+
+  // nextScale: clamp auf [1,6], multiplikativ
+  ok('nextScale in-range', nextScale(2, 1.5) === 3);
+  ok('nextScale clamp max', nextScale(5, 2) === 6);
+  ok('nextScale clamp min', nextScale(1, 0.5) === 1);
+
+  // sketchRecord: baut korrekten Datensatz
+  const rec = sketchRecord('Test', 'THUMB', 'PAINT');
+  ok('sketchRecord name', rec.name==='Test');
+  ok('sketchRecord motif', rec.motif===S.bg);
+  ok('sketchRecord blobs', rec.thumb==='THUMB' && rec.paint==='PAINT');
+  ok('sketchRecord view copy', rec.view.scale===view.scale && rec.view!==view);
+
+  // Battle: Wochenindex springt am Freitag, Wort deterministisch
+  const epoch = new Date(BATTLE_EPOCH);
+  ok('battle week 0 am Epoch', battleWeekIndex(epoch)===0);
+  const donnerstag = new Date(BATTLE_EPOCH + 6*864e5 - 1);   // kurz vor nächstem Freitag
+  ok('battle week 0 bis Do', battleWeekIndex(donnerstag)===0);
+  const naechsterFr = new Date(BATTLE_EPOCH + 7*864e5);
+  ok('battle week 1 am nächsten Fr', battleWeekIndex(naechsterFr)===1);
+  ok('battleWord deterministisch', battleWordForDate(epoch)===BATTLE_WORDS[0]);
+  ok('battleWord in Liste', BATTLE_WORDS.includes(battleWordForDate(new Date(BATTLE_EPOCH + 100*864e5))));
+  ok('alle Wörter max 5', BATTLE_WORDS.every(w=>w.length<=5));
+
+  // Voting: Tally zählt & sortiert absteigend, hasVoted erkennt eigenes Gerät
+  const ents=[{id:'a'},{id:'b'},{id:'c'}];
+  const vrows=[{entry_id:'b',device_id:'d1'},{entry_id:'b',device_id:'d2'},{entry_id:'c',device_id:'d3'}];
+  const ranked=tallyVotes(ents, vrows);
+  ok('tally sortiert (b zuerst)', ranked[0].id==='b' && ranked[0].voteCount===2);
+  ok('tally zweiter (c)', ranked[1].id==='c' && ranked[1].voteCount===1);
+  ok('tally null votes (a)', ranked[2].id==='a' && ranked[2].voteCount===0);
+  ok('hasVoted true', hasVoted(vrows,'d1')===true);
+  ok('hasVoted false', hasVoted(vrows,'dX')===false);
+
+  // Farbeimer: flutet nach Farbe, stoppt an Linien, re-flutet gefüllte Flächen
+  const fd0=new Uint8ClampedArray(5*4);
+  const setpx=(i,r,g,b,al)=>{ fd0[i*4]=r; fd0[i*4+1]=g; fd0[i*4+2]=b; fd0[i*4+3]=al; };
+  setpx(0,0,0,0,0); setpx(1,0,0,0,0); setpx(2,0,0,0,255); setpx(3,255,0,0,255); setpx(4,255,0,0,255);
+  const mLeer=floodRegion(fd0,5,1,0,0,100,null);
+  ok('flood leer 0,1', mLeer[0]===1 && mLeer[1]===1 && mLeer[2]===0);
+  const mRot=floodRegion(fd0,5,1,3,0,100,null);
+  ok('flood re-flutet Rot', mRot[3]===1 && mRot[4]===1 && mRot[2]===0);
+
+  // Palette: MRU nach vorn, Duplikate raus (case-insensitiv), cap begrenzt
+  ok('mru front+cap', JSON.stringify(mruInsert(['a','b','c'],'x',3))===JSON.stringify(['x','a','b']));
+  ok('mru dedup+move', JSON.stringify(mruInsert(['a','b','c'],'b',3))===JSON.stringify(['b','a','c']));
+  ok('mru case-insensitiv', JSON.stringify(mruInsert(['#FFF','b'],'#fff',5))===JSON.stringify(['#fff','b']));
+
+  console.log(`Self-Tests: ${pass} pass, ${fail} fail`);
+  const el=document.getElementById('status'); if(el) el.textContent=`Self-Tests: ${pass} pass, ${fail} fail`;
+}
+if(location.hash.includes('selftest')) addEventListener('load', runSelfTests);
 </script>
+<div id="sketchOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9998;overflow:auto;padding:24px;">
+  <div style="max-width:900px;margin:0 auto;">
+    <button class="act" id="sketchClose" style="float:right">Schließen</button>
+    <h2 style="color:#fff">Meine Skizzen</h2>
+    <div id="sketchGrid" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
+  </div>
+</div>
+<div id="galleryOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow:auto;padding:24px;">
+  <div style="max-width:1000px;margin:0 auto;">
+    <button class="act" id="galClose" style="float:right">Schließen</button>
+    <h2 id="galTitle" style="color:#fff"></h2>
+    <div id="galBar" style="margin:8px 0"></div>
+    <div id="galGrid" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
+  </div>
+</div>
 </body>
 </html>
