@@ -1708,24 +1708,18 @@ function tallyVotes(entries, voteRows){
 }
 function hasVoted(voteRows, devId){ return voteRows.some(v=>v.device_id===devId); }
 
-let battleViewWeek = null;   // null = aktuelle Woche
+// Battle zeigt bewusst NUR die laufende Woche (kein Zurückblättern zu anderen Wochen)
 async function renderBattle(){
   const cur = battleWeekIndex(new Date());
-  const wk = battleViewWeek==null ? cur : battleViewWeek;
-  const word = BATTLE_WORDS[((wk%BATTLE_WORDS.length)+BATTLE_WORDS.length)%BATTLE_WORDS.length];
-  document.getElementById('galTitle').textContent = `Battle – Woche ${wk} · „${word}"`;
-  const bar=document.getElementById('galBar');
-  bar.innerHTML = `<button class="act" id="bPrev">‹ frühere</button> <button class="act" id="bNext">spätere ›</button> `+
-                  (wk===cur ? '<button class="act" id="bUpload">Mein Battle-Bild hochladen</button> ' : '')+modBtnHtml();
-  document.getElementById('bPrev').onclick=()=>{ battleViewWeek=wk-1; renderBattle(); };
-  document.getElementById('bNext').onclick=()=>{ if(wk<cur){ battleViewWeek=wk+1; renderBattle(); } };
+  const word = BATTLE_WORDS[((cur%BATTLE_WORDS.length)+BATTLE_WORDS.length)%BATTLE_WORDS.length];
+  document.getElementById('galTitle').textContent = `Battle · „${word}" (diese Woche)`;
+  document.getElementById('galBar').innerHTML = '<button class="act" id="bUpload">Mein Battle-Bild hochladen</button> '+modBtnHtml();
   wireModBtn(renderBattle);
-  const up=document.getElementById('bUpload');
-  if(up) up.onclick=async ()=>{ await uploadArtwork({mode:'battle', battleWeek:cur, battleWord:word}); renderBattle(); };
+  document.getElementById('bUpload').onclick=async ()=>{ await uploadArtwork({mode:'battle', battleWeek:cur, battleWord:word}); renderBattle(); };
   const grid=document.getElementById('galGrid'); grid.innerHTML='Lädt…';
   const [rows, votes] = await Promise.all([
-    fetchEntries(`mode=eq.battle&battle_week=eq.${wk}&order=created_at.desc&limit=200`),
-    fetchVotes(wk),
+    fetchEntries(`mode=eq.battle&battle_week=eq.${cur}&order=created_at.desc&limit=200`),
+    fetchVotes(cur),
   ]);
   const ranked = tallyVotes(rows, votes);
   const voted = hasVoted(votes, deviceId());
@@ -1733,13 +1727,13 @@ async function renderBattle(){
   ranked.forEach(e=>grid.appendChild(galCard(e, {
     showVotes:true,
     canVote:!voted,
-    onVote:async (entry)=>{ const okv=await castVote(entry.id, wk); if(!okv) alert('Du hast diese Woche schon gevotet.'); renderBattle(); },
+    onVote:async (entry)=>{ const okv=await castVote(entry.id, cur); if(!okv) alert('Du hast diese Woche schon gevotet.'); renderBattle(); },
     canDelete:!!adminCode,
     onDelete:(entry)=>deleteEntry(entry.id, renderBattle),
   })));
   galOverlay.style.display='block';
 }
-document.getElementById('battleBtn').addEventListener('click', ()=>{ battleViewWeek=null; renderBattle(); });
+document.getElementById('battleBtn').addEventListener('click', ()=>renderBattle());
 
 // „Was ist neu"-Popup – einmal pro Gerät (Version hochzählen für neue Feature-Runden)
 (function(){
