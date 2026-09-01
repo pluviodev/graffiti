@@ -233,6 +233,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
       <button class="act iconbtn" id="resetView" title="Ansicht zurücksetzen (1:1)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg></button>
+      <button class="act iconbtn" id="whatsNewOpen" title="Was ist neu (Patchnotes)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></button>
     </div>
 
     <div class="grp">
@@ -1728,6 +1730,8 @@ document.getElementById('battleBtn').addEventListener('click', ()=>{ battleViewW
   const wn=document.getElementById('whatsNew'); if(!wn) return;
   if(!localStorage.getItem('hs_whatsnew_v1')) wn.style.display='block';
   document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v1','1'); wn.style.display='none'; });
+  const openBtn=document.getElementById('whatsNewOpen');
+  if(openBtn) openBtn.addEventListener('click', ()=>{ wn.style.display='block'; });   // jederzeit wieder anzeigen
 })();
 
 //------------------------------------------------------------------
