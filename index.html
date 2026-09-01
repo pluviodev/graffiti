@@ -1108,12 +1108,25 @@ const fillTolInp=document.getElementById('fillTol');
 if(fillTolInp) fillTolInp.addEventListener('input',()=>{ S.fillTol=+fillTolInp.value; });
 const colorInp=document.getElementById('color');
 colorInp.addEventListener('input',()=>{ S.color=colorInp.value; clearMetal(); markSwatch(); updateColorFab(); });
+colorInp.addEventListener('change',()=>{ addToPalette(colorInp.value); });   // finaler Pick -> in die persistente Palette
 
-const PALETTE=['#ff2d55','#ff9500','#ffdd00','#34c759','#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ff2d92','#ffffff','#000000','#8e8e93'];
+const DEFAULT_PALETTE=['#ff2d55','#ff9500','#ffdd00','#34c759','#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ff2d92','#ffffff','#000000','#8e8e93'];
+const PALETTE_MAX=12;
 const swWrap=document.getElementById('swatches');
-PALETTE.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
-  d.addEventListener('click',()=>{ S.color=c; colorInp.value=c; clearMetal(); markSwatch(); updateColorFab(); }); swWrap.appendChild(d); });
+function loadPalette(){ try{ const j=JSON.parse(localStorage.getItem('hs_palette')); if(Array.isArray(j)&&j.length) return j.slice(0,PALETTE_MAX); }catch(e){} return DEFAULT_PALETTE.slice(); }
+function savePalette(arr){ try{ localStorage.setItem('hs_palette', JSON.stringify(arr)); }catch(e){} }
+// reine MRU-Einfügung: neue Farbe nach vorn, Duplikate raus, auf cap begrenzt (überschreibt so nach&nach die Basics)
+function mruInsert(arr, c, cap){ const lc=c.toLowerCase(); return [c, ...arr.filter(x=>x.toLowerCase()!==lc)].slice(0,cap); }
+let palette=loadPalette();
+function renderSwatches(){
+  swWrap.innerHTML='';
+  palette.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
+    d.addEventListener('click',()=>{ S.color=c; colorInp.value=c; clearMetal(); markSwatch(); updateColorFab(); }); swWrap.appendChild(d); });
+  markSwatch();
+}
+function addToPalette(c){ palette=mruInsert(palette, c, PALETTE_MAX); savePalette(palette); renderSwatches(); }
 function markSwatch(){ document.querySelectorAll('.sw').forEach(s=>s.classList.toggle('sel', !S.metal && !!s.dataset.c && s.dataset.c.toLowerCase()===S.color.toLowerCase())); }
+renderSwatches();
 
 // --- Metallic: 3 Chips (Chrom/Gold/Kupfer) + Fill/Schimmer-Toggle ---
 function clearMetal(){ S.metal=null; markMetal(); }
@@ -1698,6 +1711,11 @@ function runSelfTests(){
   ok('flood leer 0,1', mLeer[0]===1 && mLeer[1]===1 && mLeer[2]===0);
   const mRot=floodRegion(fd0,5,1,3,0,100,null);
   ok('flood re-flutet Rot', mRot[3]===1 && mRot[4]===1 && mRot[2]===0);
+
+  // Palette: MRU nach vorn, Duplikate raus (case-insensitiv), cap begrenzt
+  ok('mru front+cap', JSON.stringify(mruInsert(['a','b','c'],'x',3))===JSON.stringify(['x','a','b']));
+  ok('mru dedup+move', JSON.stringify(mruInsert(['a','b','c'],'b',3))===JSON.stringify(['b','a','c']));
+  ok('mru case-insensitiv', JSON.stringify(mruInsert(['#FFF','b'],'#fff',5))===JSON.stringify(['#fff','b']));
 
   console.log(`Self-Tests: ${pass} pass, ${fail} fail`);
   const el=document.getElementById('status'); if(el) el.textContent=`Self-Tests: ${pass} pass, ${fail} fail`;
