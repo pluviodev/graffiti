@@ -44,6 +44,9 @@
   .swatches{display:flex;gap:4px}
   .sw{width:22px;height:22px;border-radius:6px;border:2px solid #0006;cursor:pointer}
   .sw.sel{outline:2px solid var(--accent);outline-offset:1px}
+  .sw.eraser{background:
+    linear-gradient(45deg,#9aa2ad 25%,transparent 25%,transparent 75%,#9aa2ad 75%) 0 0/10px 10px,
+    linear-gradient(45deg,#9aa2ad 25%,#e9edf2 25%,#e9edf2 75%,#9aa2ad 75%) 5px 5px/10px 10px,#e9edf2}
   .grp>label.dl{text-transform:none;letter-spacing:0;color:var(--txt)}
   #dagGrp input[type=range]{width:88px}
   #angleDial{position:relative;width:46px;height:46px;border-radius:50%;background:#2f3540;
@@ -143,8 +146,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l3.5-3.5"/><path d="M8 16 19 5c.6 3.5-1 8.5-6.5 10.5z"/></svg></button>
       <button class="tool iconbtn" data-tool="smudge" title="Verwischen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15c4 2.5 8-3.5 12-1.5M6 10.5c3 1.5 6-2.5 9-.5"/></svg></button>
-      <button class="tool iconbtn" data-tool="eraser" title="Radierer">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18h13"/><rect x="5.5" y="8" width="10" height="7" rx="1.2" transform="rotate(-42 10 11.5)"/></svg></button>
       <button class="tool iconbtn" data-tool="fill" title="Füllen (Farbe in eine Fläche tippen)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 10.5a6 6 0 0 1-12 0C6 9.5 12 3 12 3z"/></svg></button>
     </div>
@@ -180,6 +181,7 @@
       <label>Farbe</label>
       <input type="color" id="color" value="#ff2d55">
       <div class="swatches" id="swatches"></div>
+      <div class="sw eraser" id="eraserSw" title="Radierer – wischt weg. Wirkt mit JEDEM Werkzeug: Linie, Kurve, Bogen, Nebeln … (Druck/Cap regeln Stärke & Breite)"></div>
     </div>
 
     <div class="grp" id="metalGrp">
@@ -294,6 +296,7 @@
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
   <ul style="margin:0 0 14px;padding-left:18px;">
     <li>🌫️ <b>Nebeln</b> — Dose weit weg: weicher Dunst für Fades & Wolken</li>
+    <li>🧽 <b>Radierer = Farbe</b> — wischt jetzt mit jedem Werkzeug (Linie, Kurve, Bogen …)</li>
     <li>🔍 <b>Zoom & Pan</b> — Mausrad zoomt, mittlere Maustaste schiebt</li>
     <li>✨ <b>Clean-Schalter</b> — Overspray aus für saubere Kanten</li>
     <li>💀 <b>Ghul Spezial Cap</b> — der dünnste Cap überhaupt</li>
@@ -392,6 +395,7 @@ const S = {
   pressure:0.55,
   cap:'fat',
   cleanEdges:false,      // true = kein Overspray/Gedrizzel außerhalb des Kerns (cleane Kanten)
+  erase:false,           // true = Radier-Modus (wischt weg statt zu malen) – wirkt mit JEDEM Werkzeug
   // Dagger (schräge Dose): Modus + Cone-Parameter
   dagMode:'free',        // 'free' = Freihand (feste Rad-Richtung), 'curve' = gebogene Bahn
   coneLen:120,           // Reichweite des Nebels (px)
@@ -549,10 +553,21 @@ function bufSeg(a,b){ const r=curR(), cf=coreFrac();
     sx.beginPath(); sx.moveTo(a.x,a.y); sx.lineTo(b.x,b.y); sx.stroke(); }
   const step=Math.max(1.5, r*0.28), d=Math.hypot(b.x-a.x,b.y-a.y), n=Math.max(1,Math.round(d/step));
   for(let i=1;i<=n;i++){ const t=i/n; speckle(a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t, r); } }
+// Radier-Vorschau: die Wand (bg) in der Strichform zeigen -> es sieht aus, als würde live weggewischt
+function eraseReveal(){
+  tsx.clearRect(0,0,W,H); tsx.drawImage(strokeCv,0,0);
+  tsx.save(); tsx.globalCompositeOperation='source-in'; tsx.drawImage(bg,0,0); tsx.restore();
+  return tintCv;
+}
 function renderFullPreview(){ pvx.clearRect(0,0,W,H); drawMaskDash();
+  if(S.erase){ pvx.save(); maskClip(pvx); pvx.drawImage(eraseReveal(),0,0); pvx.restore(); return; }
   const src=S.metal?metalStroke():strokeCv;
   pvx.save(); maskClip(pvx); pvx.globalAlpha=fullAlpha(); pvx.drawImage(src,0,0); pvx.restore(); }
 function commitFullStroke(){
+  if(S.erase){   // Strichform als Alpha aus dem fertigen Bild herausstanzen
+    withMask(px,()=>{ px.save(); px.globalCompositeOperation='destination-out'; px.drawImage(strokeCv,0,0); px.restore(); });
+    resetBuf(); pvx.clearRect(0,0,W,H); drawPreview(); scheduleAutoSave(); return;
+  }
   const src=S.metal?metalStroke():strokeCv;
   withMask(px,()=>{ px.save(); px.globalAlpha=fullAlpha(); px.drawImage(src,0,0); px.restore(); });
   resetBuf(); pvx.clearRect(0,0,W,H); drawPreview();
@@ -585,13 +600,6 @@ function fogDab(x,y){ fogSpeckle(x,y); }
 function fogSeg(a,b){ const R=fogR();
   const step=Math.max(2, R*0.22), d=Math.hypot(b.x-a.x,b.y-a.y), n=Math.max(1,Math.round(d/step));
   for(let i=1;i<=n;i++){ const t=i/n; fogSpeckle(a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t); } }
-
-// Radierer (immer direkt, voll deckend entfernen)
-function eraseDab(x,y){ const r=curR(); withMask(px,()=>{ px.save(); px.globalCompositeOperation='destination-out';
-  px.fillStyle='#000'; px.beginPath(); px.arc(x,y,r,0,TAU); px.fill(); px.restore(); }); }
-function eraseSeg(a,b){ const r=curR(); withMask(px,()=>{ px.save(); px.globalCompositeOperation='destination-out';
-  px.strokeStyle='#000'; px.lineWidth=r*2; px.lineCap='round'; px.lineJoin='round';
-  px.beginPath(); px.moveTo(a.x,a.y); px.lineTo(b.x,b.y); px.stroke(); px.restore(); }); }
 
 //------------------------------------------------------------------
 // Füllen (ColorDrop): Flood-Fill bis zu den Linien, saubere Kanten
@@ -647,10 +655,12 @@ function doFill(p){
   for(let i=0;i<W*H;i++){ if(mask[i]){ const j=i*4; fd[j]=rr; fd[j+1]=gg; fd[j+2]=bb; fd[j+3]=255; } }
   fx.putImageData(fimg,0,0);
   pushUndo();
-  // 1) alte Farbe in der Region entfernen (ermöglicht Umfärben)
+  // 1) alte Farbe in der Region entfernen (ermöglicht Umfärben – im Radier-Modus bleibt es dabei)
   px.save(); px.globalCompositeOperation='destination-out'; px.drawImage(fc,0,0); px.restore();
-  // 2) neue Farbe HINTER die verbleibende Farbe (Linien bleiben oben) + weiche Kante
-  px.save(); px.globalCompositeOperation='destination-over'; px.filter='blur(0.7px)'; px.drawImage(fc,0,0); px.filter='none'; px.restore();
+  if(!S.erase){
+    // 2) neue Farbe HINTER die verbleibende Farbe (Linien bleiben oben) + weiche Kante
+    px.save(); px.globalCompositeOperation='destination-over'; px.filter='blur(0.7px)'; px.drawImage(fc,0,0); px.filter='none'; px.restore();
+  }
   drawPreview(); updateStatus();
 }
 
@@ -660,6 +670,7 @@ function doFill(p){
 function maybeSpawnDrip(x,y){
   const cap = CAPS[S.cap];
   if(S.tool!=='spray') return;
+  if(S.erase) return;        // Radieren tropft nicht
   if(S.cleanEdges) return;   // cleane Kanten: keine Tropfen
   if(drips.length>18) return;
   const r = curR();
@@ -940,8 +951,6 @@ preview.addEventListener('pointerdown', e=>{
 
   if(S.tool==='fill'){
     doFill(p);
-  } else if(S.tool==='eraser'){
-    pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y}; eraseDab(p.x,p.y);
   } else if(S.tool==='spray'){
     pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y};
     resetBuf(); bufDab(p.x,p.y); renderFullPreview();
@@ -984,7 +993,6 @@ preview.addEventListener('pointermove', e=>{
   }
   if(S.drawing){
     if(S.tool==='smudge'){ smudge(S.last.x,S.last.y,p.x,p.y); }
-    else if(S.tool==='eraser'){ eraseSeg(S.lastSpray,p); S.lastSpray={x:p.x,y:p.y}; }
     else if(S.tool==='spray'){
       bufSeg(S.lastSpray,p); renderFullPreview();
       S.lastSpray={x:p.x,y:p.y};
@@ -1180,7 +1188,7 @@ pr.addEventListener('input',()=>{ setPressure(pr.value); });
 const fillTolInp=document.getElementById('fillTol');
 if(fillTolInp) fillTolInp.addEventListener('input',()=>{ S.fillTol=+fillTolInp.value; });
 const colorInp=document.getElementById('color');
-colorInp.addEventListener('input',()=>{ S.color=colorInp.value; clearMetal(); markSwatch(); updateColorFab(); });
+colorInp.addEventListener('input',()=>{ S.erase=false; S.color=colorInp.value; clearMetal(); markSwatch(); updateColorFab(); });
 colorInp.addEventListener('change',()=>{ addToPalette(colorInp.value); });   // finaler Pick -> in die persistente Palette
 
 const DEFAULT_PALETTE=['#ff2d55','#ff9500','#ffdd00','#34c759','#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ff2d92','#ffffff','#000000','#8e8e93'];
@@ -1194,19 +1202,24 @@ let palette=loadPalette();
 function renderSwatches(){
   swWrap.innerHTML='';
   palette.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
-    d.addEventListener('click',()=>{ S.color=c; colorInp.value=c; clearMetal(); markSwatch(); updateColorFab(); }); swWrap.appendChild(d); });
+    d.addEventListener('click',()=>{ S.erase=false; S.color=c; colorInp.value=c; clearMetal(); markSwatch(); updateColorFab(); }); swWrap.appendChild(d); });
   markSwatch();
 }
 function addToPalette(c){ palette=mruInsert(palette, c, PALETTE_MAX); savePalette(palette); renderSwatches(); }
-function markSwatch(){ document.querySelectorAll('.sw').forEach(s=>s.classList.toggle('sel', !S.metal && !!s.dataset.c && s.dataset.c.toLowerCase()===S.color.toLowerCase())); }
+function markSwatch(){ document.querySelectorAll('.sw').forEach(s=>s.classList.toggle('sel', !S.metal && !S.erase && !!s.dataset.c && s.dataset.c.toLowerCase()===S.color.toLowerCase()));
+  const es=document.getElementById('eraserSw'); if(es) es.classList.toggle('sel', S.erase); }
+// Radier-Modus umschalten (Radieren ist "eine Farbe", kein eigenes Werkzeug)
+function setErase(on){ S.erase=!!on; markSwatch(); markMetal(); updateColorFab(); updateStatus(); }
+const eraserSw=document.getElementById('eraserSw');
+if(eraserSw) eraserSw.addEventListener('click',()=>setErase(true));
 renderSwatches();
 
 // --- Metallic: 3 Chips (Chrom/Gold/Kupfer) + Fill/Schimmer-Toggle ---
 function clearMetal(){ S.metal=null; markMetal(); }
 function markMetal(){ document.querySelectorAll('.metalchip').forEach(c=>
-  c.classList.toggle('sel', !!S.metal && c.dataset.metal===S.metal.metal)); updateStatus(); }
+  c.classList.toggle('sel', !S.erase && !!S.metal && c.dataset.metal===S.metal.metal)); updateStatus(); }
 document.querySelectorAll('.metalchip').forEach(c=>{
-  c.addEventListener('click',()=>{ S.metal={metal:c.dataset.metal, mode:S.metalMode}; markSwatch(); markMetal(); updateColorFab(); });
+  c.addEventListener('click',()=>{ S.erase=false; S.metal={metal:c.dataset.metal, mode:S.metalMode}; markSwatch(); markMetal(); updateColorFab(); });
 });
 const metalModeBtn=document.getElementById('metalMode');
 if(metalModeBtn) metalModeBtn.addEventListener('click',()=>{
@@ -1336,7 +1349,6 @@ function updateStatus(){
       curve:'Kurve: Klick Start · Klick Ende · Klick für Biegung · Cone rechtwinklig & dreht mit · Seite Links/Rechts',
     })[S.dagMode],
     smudge:'Ziehen zum Verwischen nasser Farbe',
-    eraser:'Ziehen zum Wegradieren',
     fill:'In eine freie Fläche tippen – Farbe läuft bis zu den Linien voll · Toleranz regelt Auslauf-Sicherheit',
   };
   if(S.drawMask){
@@ -1351,8 +1363,9 @@ function updateStatus(){
   }
   const metalTag = S.metal
     ? `<b>${({chrome:'Chrom',gold:'Gold',copper:'Kupfer'})[S.metal.metal]}</b> (${S.metal.mode==='fill'?'Fill':'Schimmer'}) · ` : '';
+  const eraseTag = S.erase ? '<b>🧽 Radieren</b> · ' : '';
   document.getElementById('status').innerHTML =
-    metalTag +
+    eraseTag + metalTag +
     `<b>${CAPS[S.cap].label}</b> · Druck ${Math.round(S.pressure*100)}% · ${hints[S.tool]} · `+
     `<kbd>Strg</kbd>+<kbd>Z</kbd> Zurück`;
 }
@@ -1360,10 +1373,13 @@ function updateStatus(){
 //------------------------------------------------------------------
 // Mobil-Bedienung: Werkzeug-Rad (halten & ziehen), Farb-Ring, ☰-Menü
 //------------------------------------------------------------------
-const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',fog:'🌫️',dagger:'🗡️',smudge:'👆',eraser:'🧽',fill:'🪣'};
-const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',fog:'Nebeln',dagger:'Dagger',smudge:'Verwischen',eraser:'Radierer',fill:'Füllen'};
+const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',fog:'🌫️',dagger:'🗡️',smudge:'👆',fill:'🪣'};
+const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',fog:'Nebeln',dagger:'Dagger',smudge:'Verwischen',fill:'Füllen'};
 function updateToolFab(){ const f=document.getElementById('toolFab'); if(f) f.textContent=TOOL_EMOJI[S.tool]||'🎨'; }
-function updateColorFab(){ const f=document.getElementById('colorFab'); if(f) f.style.background=S.color; }
+function updateColorFab(){ const f=document.getElementById('colorFab'); if(!f) return;
+  f.style.background = S.erase
+    ? 'repeating-conic-gradient(#9aa2ad 0 25%,#e9edf2 0 50%) 50%/14px 14px'
+    : S.color; }
 
 (function initMobUI(){
   const toolFab=document.getElementById('toolFab');
@@ -1448,8 +1464,11 @@ function updateColorFab(){ const f=document.getElementById('colorFab'); if(f) f.
 
   // --- Farb-Ring ---
   palette.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
-    d.addEventListener('click',()=>{ S.color=c; document.getElementById('color').value=c; clearMetal(); markSwatch(); updateColorFab(); colorRing.classList.remove('open'); });
+    d.addEventListener('click',()=>{ S.erase=false; S.color=c; document.getElementById('color').value=c; clearMetal(); markSwatch(); updateColorFab(); colorRing.classList.remove('open'); });
     colorRing.appendChild(d); });
+  const erRing=document.createElement('div'); erRing.className='sw eraser'; erRing.title='Radierer – wischt weg (mit jedem Werkzeug)';
+  erRing.addEventListener('click',()=>{ setErase(true); colorRing.classList.remove('open'); });
+  colorRing.appendChild(erRing);
   colorFab.addEventListener('click',()=>colorRing.classList.toggle('open'));
 
   // --- ☰-Menü (blendet die bestehende Toolbar ein) ---
