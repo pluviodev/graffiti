@@ -1492,6 +1492,42 @@ document.getElementById('mySketchesBtn').addEventListener('click', async ()=>{
 });
 
 //------------------------------------------------------------------
+// Online (Supabase) – Config + Upload
+//------------------------------------------------------------------
+const SUPA = {
+  url:  'https://REPLACE.supabase.co',       // aus SETUP.md
+  anon: 'REPLACE_ANON_KEY',                  // anon public key (RLS-geschützt)
+};
+const publicUrl = p => `${SUPA.url}/storage/v1/object/public/artworks/${p}`;
+
+function getNick(){ return localStorage.getItem('hs_nick')||''; }
+function setNick(v){ localStorage.setItem('hs_nick', v); }
+
+// Hintergrund + Paint zu EINEM PNG (DataURL)
+function flattenPNG(){
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const cx=c.getContext('2d'); cx.drawImage(bg,0,0); cx.drawImage(paint,0,0);
+  return c.toDataURL('image/png');
+}
+
+async function uploadArtwork({mode, battleWeek=null, battleWord=null}){
+  const nickname = prompt('Dein Künstlername:', getNick());
+  if(nickname===null) return;
+  setNick(nickname);
+  const code = prompt('Upload-Code:');
+  if(!code) return;
+  const body = { code, imageBase64: flattenPNG(), nickname, mode, motif: S.bg, battleWeek, battleWord };
+  const res = await fetch(`${SUPA.url}/functions/v1/submit`, {
+    method:'POST',
+    headers:{ 'content-type':'application/json', 'Authorization':`Bearer ${SUPA.anon}` },
+    body: JSON.stringify(body),
+  });
+  if(res.status===403){ alert('Falscher Upload-Code.'); return; }
+  if(!res.ok){ alert('Upload fehlgeschlagen.'); return; }
+  alert('Hochgeladen!');
+}
+
+//------------------------------------------------------------------
 // Self-Tests (nur bei #selftest) – reine Logik, Ausgabe in Konsole
 //------------------------------------------------------------------
 function runSelfTests(){
