@@ -270,6 +270,23 @@
   <div id="toolWheel"></div>
 </div>
 
+<!-- Overlays (Popups) müssen VOR dem Script stehen, damit die Bindungen die Elemente finden -->
+<div id="sketchOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9998;overflow:auto;padding:24px;">
+  <div style="max-width:900px;margin:0 auto;">
+    <button class="act" id="sketchClose" style="float:right">Schließen</button>
+    <h2 style="color:#fff">Meine Skizzen</h2>
+    <div id="sketchGrid" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
+  </div>
+</div>
+<div id="galleryOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow:auto;padding:24px;">
+  <div style="max-width:1000px;margin:0 auto;">
+    <button class="act" id="galClose" style="float:right">Schließen</button>
+    <h2 id="galTitle" style="color:#fff"></h2>
+    <div id="galBar" style="margin:8px 0"></div>
+    <div id="galGrid" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
+  </div>
+</div>
+
 <script>
 "use strict";
 //==================================================================
@@ -1722,20 +1739,5 @@ function runSelfTests(){
 }
 if(location.hash.includes('selftest')) addEventListener('load', runSelfTests);
 </script>
-<div id="sketchOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9998;overflow:auto;padding:24px;">
-  <div style="max-width:900px;margin:0 auto;">
-    <button class="act" id="sketchClose" style="float:right">Schließen</button>
-    <h2 style="color:#fff">Meine Skizzen</h2>
-    <div id="sketchGrid" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
-  </div>
-</div>
-<div id="galleryOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow:auto;padding:24px;">
-  <div style="max-width:1000px;margin:0 auto;">
-    <button class="act" id="galClose" style="float:right">Schließen</button>
-    <h2 id="galTitle" style="color:#fff"></h2>
-    <div id="galBar" style="margin:8px 0"></div>
-    <div id="galGrid" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
-  </div>
-</div>
 </body>
 </html>
