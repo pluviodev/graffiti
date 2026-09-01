@@ -150,6 +150,7 @@
     <div class="grp">
       <label>Cap</label>
       <select id="cap"></select>
+      <label class="dl" title="Aus = feiner Nebel/Overspray außerhalb der Linie. Ein = cleane Kanten."><input type="checkbox" id="cleanEdges"> Clean</label>
     </div>
 
     <div class="grp" id="dagGrp" style="display:none">
@@ -313,6 +314,7 @@ Object.entries(CAPS).forEach(([k,c])=>{
   const o=document.createElement('option'); o.value=k; o.textContent=c.label; capSel.appendChild(o);
 });
 capSel.value='fat';
+document.getElementById('cleanEdges').addEventListener('change', e=>{ S.cleanEdges = e.target.checked; });
 
 //------------------------------------------------------------------
 // State
@@ -325,6 +327,7 @@ const S = {
   metalMode:'fill',      // gemerkter Modus für die Metallic-Chips ('fill' | 'shimmer')
   pressure:0.55,
   cap:'fat',
+  cleanEdges:false,      // true = kein Overspray/Gedrizzel außerhalb des Kerns (cleane Kanten)
   // Dagger (schräge Dose): Modus + Cone-Parameter
   dagMode:'free',        // 'free' = Freihand (feste Rad-Richtung), 'curve' = gebogene Bahn
   coneLen:120,           // Reichweite des Nebels (px)
@@ -425,7 +428,8 @@ function speckle(x,y,r){
   noteY(y-r); noteY(y+r);
   const cap=CAPS[S.cap], p=S.pressure, cf=coreFrac();
   const n=Math.round(r*cap.density*(0.6+p*2.4));
-  const rimMax=r*(1.06+cap.spread*0.25), band=Math.max(1e-3, rimMax-r*cf);
+  const rimMax = S.cleanEdges ? r*cf*1.04 : r*(1.06+cap.spread*0.25);
+  const band=Math.max(1e-3, rimMax-r*cf);
   for(let i=0;i<n;i++){
     const ang=Math.random()*TAU, t=Math.random();
     const rad = r*cf + band*Math.pow(t, 0.55+cap.edge*1.0);
@@ -561,6 +565,7 @@ function doFill(p){
 function maybeSpawnDrip(x,y){
   const cap = CAPS[S.cap];
   if(S.tool!=='spray') return;
+  if(S.cleanEdges) return;   // cleane Kanten: keine Tropfen
   if(drips.length>18) return;
   const r = curR();
   // nur bei ruhiger Hand & je nach Druck/Cap – deutlich seltener, erst nach längerem Halten
