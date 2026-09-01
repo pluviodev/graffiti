@@ -234,6 +234,12 @@
       <button class="act iconbtn" id="resetView" title="Ansicht zurücksetzen (1:1)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg></button>
     </div>
+
+    <div class="grp">
+      <label>Skizzen</label>
+      <button class="act" id="saveSketchBtn">Speichern unter…</button>
+      <button class="act" id="mySketchesBtn">Meine Skizzen</button>
+    </div>
   </div>
 
   <div id="stageWrap">
@@ -508,6 +514,7 @@ function commitFullStroke(){
   const src=S.metal?metalStroke():strokeCv;
   withMask(px,()=>{ px.save(); px.globalAlpha=fullAlpha(); px.drawImage(src,0,0); px.restore(); });
   resetBuf(); pvx.clearRect(0,0,W,H); drawPreview();
+  scheduleAutoSave();
 }
 
 // Radierer (immer direkt, voll deckend entfernen)
@@ -1386,6 +1393,105 @@ addEventListener('pointerup', e=>{ if(e.button===1) panning=false; });
 document.getElementById('resetView').addEventListener('click', resetView);
 
 //------------------------------------------------------------------
+// Lokales Speichern (IndexedDB)
+//------------------------------------------------------------------
+const AUTO_SLOT = '__auto__';
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open('hallSketcher', 1);
+    r.onupgradeneeded = ()=>{ r.result.createObjectStore('sketches', {keyPath:'id', autoIncrement:true}); };
+    r.onsuccess = ()=>res(r.result);
+    r.onerror = ()=>rej(r.error);
+  });
+}
+function idbTx(db, mode){ return db.transaction('sketches', mode).objectStore('sketches'); }
+function idbReq(req){ return new Promise((res,rej)=>{ req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); }); }
+
+// reiner Datensatz-Builder (testbar)
+function sketchRecord(name, thumbBlob, paintBlob){
+  return { name, motif:S.bg, view:{scale:view.scale, tx:view.tx, ty:view.ty}, updatedAt:Date.now(), thumb:thumbBlob, paint:paintBlob };
+}
+
+// aktuellen Paint-Layer als PNG-Blob
+function capturePaint(){ return new Promise(res=>paint.toBlob(res, 'image/png')); }
+// kleines Vorschaubild (Hintergrund + Paint, 200px breit)
+function captureThumb(){
+  const t=document.createElement('canvas'); t.width=200; t.height=Math.round(200*H/W);
+  const tx=t.getContext('2d'); tx.drawImage(bg,0,0,t.width,t.height); tx.drawImage(paint,0,0,t.width,t.height);
+  return new Promise(res=>t.toBlob(res,'image/png'));
+}
+
+async function saveSketch(name){
+  const db=await idbOpen();
+  const rec=sketchRecord(name, await captureThumb(), await capturePaint());
+  if(name===AUTO_SLOT){
+    const all=await idbReq(idbTx(db,'readonly').getAll());
+    const ex=all.find(s=>s.name===AUTO_SLOT);
+    if(ex) rec.id=ex.id;
+  }
+  await idbReq(idbTx(db,'readwrite').put(rec));
+}
+async function listSketches(){
+  const db=await idbOpen();
+  const all=await idbReq(idbTx(db,'readonly').getAll());
+  return all.filter(s=>s.name!==AUTO_SLOT).sort((a,b)=>b.updatedAt-a.updatedAt);
+}
+async function getAuto(){
+  const db=await idbOpen();
+  const all=await idbReq(idbTx(db,'readonly').getAll());
+  return all.find(s=>s.name===AUTO_SLOT)||null;
+}
+async function deleteSketch(id){ const db=await idbOpen(); await idbReq(idbTx(db,'readwrite').delete(id)); }
+
+// Skizze in die App laden: Motiv setzen, Paint-Layer wiederherstellen, View setzen
+async function applySketch(rec){
+  S.bg = rec.motif; setBackground(rec.motif);
+  await new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{ px.clearRect(0,0,W,H); px.drawImage(img,0,0,W,H); res(); };
+    img.src=URL.createObjectURL(rec.paint);
+  });
+  if(rec.view){ view.scale=rec.view.scale; view.tx=rec.view.tx; view.ty=rec.view.ty; applyView(); }
+  drawPreview();
+}
+
+// Auto-Save (debounced) nach jedem fertigen Strich
+let autoTimer=null;
+function scheduleAutoSave(){ clearTimeout(autoTimer); autoTimer=setTimeout(()=>saveSketch(AUTO_SLOT).catch(()=>{}), 1500); }
+
+// Weitermachen-Angebot beim Start
+addEventListener('load', async ()=>{
+  if(location.hash.includes('selftest')) return;
+  try{
+    const auto=await getAuto();
+    if(auto && confirm('Weitermachen, wo du warst?')) await applySketch(auto);
+  }catch(e){}
+});
+
+// Skizzen-UI
+document.getElementById('saveSketchBtn').addEventListener('click', async ()=>{
+  const name=prompt('Name der Skizze:'); if(!name) return;
+  await saveSketch(name); alert('Gespeichert.');
+});
+const sketchOverlay=document.getElementById('sketchOverlay');
+document.getElementById('sketchClose').addEventListener('click', ()=>sketchOverlay.style.display='none');
+document.getElementById('mySketchesBtn').addEventListener('click', async ()=>{
+  const grid=document.getElementById('sketchGrid'); grid.innerHTML='';
+  const list=await listSketches();
+  if(!list.length){ grid.innerHTML='<p style="color:#ccc">Noch keine Skizzen.</p>'; }
+  list.forEach(rec=>{
+    const card=document.createElement('div'); card.style.cssText='width:200px;background:#222;padding:8px;border-radius:8px;color:#fff;font-size:13px';
+    const img=document.createElement('img'); img.src=URL.createObjectURL(rec.thumb); img.style.cssText='width:100%;border-radius:4px;cursor:pointer';
+    img.onclick=async ()=>{ await applySketch(rec); sketchOverlay.style.display='none'; };
+    const t=document.createElement('div'); t.textContent=rec.name; t.style.margin='6px 0';
+    const del=document.createElement('button'); del.className='act'; del.textContent='Löschen';
+    del.onclick=async ()=>{ if(confirm('Löschen?')){ await deleteSketch(rec.id); card.remove(); } };
+    card.append(img,t,del); grid.appendChild(card);
+  });
+  sketchOverlay.style.display='block';
+});
+
+//------------------------------------------------------------------
 // Self-Tests (nur bei #selftest) – reine Logik, Ausgabe in Konsole
 //------------------------------------------------------------------
 function runSelfTests(){
@@ -1397,10 +1503,24 @@ function runSelfTests(){
   ok('nextScale clamp max', nextScale(5, 2) === 6);
   ok('nextScale clamp min', nextScale(1, 0.5) === 1);
 
+  // sketchRecord: baut korrekten Datensatz
+  const rec = sketchRecord('Test', 'THUMB', 'PAINT');
+  ok('sketchRecord name', rec.name==='Test');
+  ok('sketchRecord motif', rec.motif===S.bg);
+  ok('sketchRecord blobs', rec.thumb==='THUMB' && rec.paint==='PAINT');
+  ok('sketchRecord view copy', rec.view.scale===view.scale && rec.view!==view);
+
   console.log(`Self-Tests: ${pass} pass, ${fail} fail`);
   const el=document.getElementById('status'); if(el) el.textContent=`Self-Tests: ${pass} pass, ${fail} fail`;
 }
 if(location.hash.includes('selftest')) addEventListener('load', runSelfTests);
 </script>
+<div id="sketchOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9998;overflow:auto;padding:24px;">
+  <div style="max-width:900px;margin:0 auto;">
+    <button class="act" id="sketchClose" style="float:right">Schließen</button>
+    <h2 style="color:#fff">Meine Skizzen</h2>
+    <div id="sketchGrid" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
+  </div>
+</div>
 </body>
 </html>
