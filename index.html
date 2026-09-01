@@ -1373,7 +1373,7 @@ function updateColorFab(){ const f=document.getElementById('colorFab'); if(f) f.
   toolFab.addEventListener('pointercancel',()=>{ if(anchor&&wheelMode==='drag') closeWheel(false); });
 
   // --- Farb-Ring ---
-  PALETTE.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
+  palette.forEach(c=>{ const d=document.createElement('div'); d.className='sw'; d.style.background=c; d.dataset.c=c;
     d.addEventListener('click',()=>{ S.color=c; document.getElementById('color').value=c; clearMetal(); markSwatch(); updateColorFab(); colorRing.classList.remove('open'); });
     colorRing.appendChild(d); });
   colorFab.addEventListener('click',()=>colorRing.classList.toggle('open'));
