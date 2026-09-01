@@ -1517,8 +1517,8 @@ document.getElementById('mySketchesBtn').addEventListener('click', async ()=>{
 // Online (Supabase) – Config + Upload
 //------------------------------------------------------------------
 const SUPA = {
-  url:  'https://REPLACE.supabase.co',       // aus SETUP.md
-  anon: 'REPLACE_ANON_KEY',                  // anon public key (RLS-geschützt)
+  url:  'https://eztfvguqquhnmeolgwkv.supabase.co',
+  anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6dGZ2Z3VxcXVobm1lb2xnd2t2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNDYyOTcsImV4cCI6MjEwMzgyMjI5N30.yYFvuPymIUwRCUzOAow-1KIM_etjyYNLENaKFk7v-d0',  // anon public key (RLS-geschützt, gehört in den Client)
 };
 const publicUrl = p => `${SUPA.url}/storage/v1/object/public/artworks/${p}`;
 
