@@ -137,6 +137,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/></svg></button>
       <button class="tool iconbtn" data-tool="curve" title="Kurve">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16c3-9 13 2 16-8"/></svg></button>
+      <button class="tool iconbtn" data-tool="fog" title="Nebeln (Dose weit weg – weicher Dunst)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16h11a3 3 0 0 0 .3-6A5 5 0 0 0 7 9.5"/><path d="M4 19.5h9M6 13h7"/></svg></button>
       <button class="tool iconbtn" data-tool="dagger" title="Dagger (schräge Dose)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l3.5-3.5"/><path d="M8 16 19 5c.6 3.5-1 8.5-6.5 10.5z"/></svg></button>
       <button class="tool iconbtn" data-tool="smudge" title="Verwischen">
@@ -291,6 +293,7 @@
 <div id="whatsNew" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;width:min(300px,calc(100vw - 24px));box-sizing:border-box;background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:16px;font-size:14px;line-height:1.5;">
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
   <ul style="margin:0 0 14px;padding-left:18px;">
+    <li>🌫️ <b>Nebeln</b> — Dose weit weg: weicher Dunst für Fades & Wolken</li>
     <li>🔍 <b>Zoom & Pan</b> — Mausrad zoomt, mittlere Maustaste schiebt</li>
     <li>✨ <b>Clean-Schalter</b> — Overspray aus für saubere Kanten</li>
     <li>💀 <b>Ghul Spezial Cap</b> — der dünnste Cap überhaupt</li>
@@ -555,6 +558,33 @@ function commitFullStroke(){
   resetBuf(); pvx.clearRect(0,0,W,H); drawPreview();
   scheduleAutoSave();
 }
+
+//------------------------------------------------------------------
+// Nebeln – Dose weit von der Wand: breiter, weicher Dunst OHNE soliden Kern.
+// Sehr transparente Feinkörnung mit gauß-artiger Radialdichte (mittig dicht,
+// federt zum Rand hin lautlos aus → keine harte Kante). Baut sich langsam auf:
+// mehrere Züge / längeres Halten dunkeln nach. Keine Tropfen (zu trocken/weit).
+//------------------------------------------------------------------
+function fogR(){ return CAPS[S.cap].radius*(1.6+S.pressure*1.4); }   // weiter weg = deutlich breiter als normaler Spray
+function fogSpeckle(x,y){
+  const cap=CAPS[S.cap], p=S.pressure, R=fogR();
+  noteY(y-R); noteY(y+R);
+  const n=Math.round(R*cap.density*(0.35+p*0.85));      // moderate Punktzahl -> kein sofortiges Zulaufen
+  for(let i=0;i<n;i++){
+    const ang=Math.random()*TAU;
+    // gauß-artige Radiuswahl (Mittel aus 4 Zufallswerten): Wolke ist mittig dicht, außen dünn
+    const g=(Math.random()+Math.random()+Math.random()+Math.random())/4;
+    const rad=R*g, fall=1-g;                             // fall: 1 in der Mitte .. 0 am weichen Rand
+    const a=clamp((0.04+0.09*p)*fall, 0, 0.16);          // sehr dünn -> realistischer Aufbau über Wiederholung
+    const dotR=0.5+Math.random()*(0.8+cap.radius*0.02);  // feine Tröpfchen, minimal größer bei fetten Caps
+    sx.fillStyle=rgba(S.color,a);
+    sx.beginPath(); sx.arc(x+Math.cos(ang)*rad, y+Math.sin(ang)*rad, dotR, 0, TAU); sx.fill();
+  }
+}
+function fogDab(x,y){ fogSpeckle(x,y); }
+function fogSeg(a,b){ const R=fogR();
+  const step=Math.max(2, R*0.22), d=Math.hypot(b.x-a.x,b.y-a.y), n=Math.max(1,Math.round(d/step));
+  for(let i=1;i<=n;i++){ const t=i/n; fogSpeckle(a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t); } }
 
 // Radierer (immer direkt, voll deckend entfernen)
 function eraseDab(x,y){ const r=curR(); withMask(px,()=>{ px.save(); px.globalCompositeOperation='destination-out';
@@ -915,6 +945,9 @@ preview.addEventListener('pointerdown', e=>{
   } else if(S.tool==='spray'){
     pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y};
     resetBuf(); bufDab(p.x,p.y); renderFullPreview();
+  } else if(S.tool==='fog'){
+    pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y};
+    resetBuf(); fogDab(p.x,p.y); renderFullPreview();
   } else if(S.tool==='smudge'){
     pushUndo(); S.drawing=true;
   } else if(S.tool==='line'){
@@ -956,6 +989,10 @@ preview.addEventListener('pointermove', e=>{
       bufSeg(S.lastSpray,p); renderFullPreview();
       S.lastSpray={x:p.x,y:p.y};
     }
+    else if(S.tool==='fog'){
+      fogSeg(S.lastSpray,p); renderFullPreview();
+      S.lastSpray={x:p.x,y:p.y};
+    }
     else if(S.tool==='dagger' && S.dagMode==='free'){
       daggerSeg(S.lastSpray,p); renderFullPreview();
       S.lastSpray={x:p.x,y:p.y};
@@ -974,7 +1011,7 @@ function endStroke(e){
     drawPreview(); return; }
   if(S.drawing){
     S.drawing=false;
-    if(S.tool==='spray' || (S.tool==='dagger' && S.dagMode==='free')) commitFullStroke();
+    if(S.tool==='spray' || S.tool==='fog' || (S.tool==='dagger' && S.dagMode==='free')) commitFullStroke();
   }
 }
 preview.addEventListener('pointerup', endStroke);
@@ -991,6 +1028,9 @@ function loop(){
       bufDab(S.cur.x,S.cur.y); renderFullPreview();  // Aufbau/Verdichten beim Halten
     } else S.stationary=0;
     maybeSpawnDrip(S.cur.x,S.cur.y);
+  }
+  if(S.drawing && S.tool==='fog' && dist(S.cur,S.lastSpray)<2.2){
+    fogDab(S.cur.x,S.cur.y); renderFullPreview();   // Dunst verdichtet beim Halten (kein Tropfen)
   }
   if(S.drawing && S.tool==='dagger' && S.dagMode==='free' && dist(S.cur,S.lastSpray)<2.2){
     daggerDab(S.cur, S.coneAngle*Math.PI/180); renderFullPreview();   // Nebel verdichtet beim Halten
@@ -1287,6 +1327,7 @@ addEventListener('keydown',e=>{
 function updateStatus(){
   const hints={
     spray:'Gedrückt halten & ziehen · Druck regelt stufenlos Nebel → fast solide Linie',
+    fog:'Nebeln: gedrückt halten & ziehen · weicher Dunst ohne Kern · langsam aufbauen (mehrfach drüber/halten) · Druck & Cap regeln Breite',
     line:'Klick = Startpunkt, zweiter Klick = Linie',
     curve:'Klick Start · Klick Ende · Klick für Biegung',
     dagger: ({
@@ -1319,8 +1360,8 @@ function updateStatus(){
 //------------------------------------------------------------------
 // Mobil-Bedienung: Werkzeug-Rad (halten & ziehen), Farb-Ring, ☰-Menü
 //------------------------------------------------------------------
-const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',dagger:'🗡️',smudge:'👆',eraser:'🧽',fill:'🪣'};
-const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',dagger:'Dagger',smudge:'Verwischen',eraser:'Radierer',fill:'Füllen'};
+const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',fog:'🌫️',dagger:'🗡️',smudge:'👆',eraser:'🧽',fill:'🪣'};
+const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',fog:'Nebeln',dagger:'Dagger',smudge:'Verwischen',eraser:'Radierer',fill:'Füllen'};
 function updateToolFab(){ const f=document.getElementById('toolFab'); if(f) f.textContent=TOOL_EMOJI[S.tool]||'🎨'; }
 function updateColorFab(){ const f=document.getElementById('colorFab'); if(f) f.style.background=S.color; }
 
