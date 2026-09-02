@@ -154,7 +154,7 @@
       <label>Cap</label>
       <select id="cap"></select>
       <label class="dl" title="Aus = feiner Nebel/Overspray außerhalb der Linie. Ein = cleane Kanten."><input type="checkbox" id="cleanEdges"> Clean</label>
-      <label class="dl" title="Aus = Realismus (Wand scheint durch). Ein = voll deckend, Farbe deckt komplett."><input type="checkbox" id="solidPaint"> Deckend</label>
+      <label class="dl" title="Aus = Realismus (Wand scheint durch). Ein = voll deckend, Farbe deckt komplett."><input type="checkbox" id="solidPaint" checked> Deckend</label>
     </div>
 
     <div class="grp" id="dagGrp" style="display:none">
@@ -297,7 +297,7 @@
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
   <ul style="margin:0 0 14px;padding-left:18px;">
     <li>📤 <b>Direkt-Upload</b> — „Aktuelles Bild hochladen" lädt sauber aus der App (kein Screenshot nötig)</li>
-    <li>🎨 <b>Deckend-Schalter</b> — voll deckende Farbe (100%) statt durchscheinender Wand</li>
+    <li>🎨 <b>Deckend ist jetzt Standard</b> — solide Farbe ohne Sprenkel (v.a. beim Zoom); für den durchscheinenden Realismus-Look „Deckend" abwählen</li>
     <li>🌫️ <b>Nebeln</b> — Dose weit weg: weicher Dunst für Fades & Wolken</li>
     <li>🧽 <b>Radierer = Farbe</b> — wischt jetzt mit jedem Werkzeug (Linie, Kurve, Bogen …)</li>
     <li>🔍 <b>Zoom & Pan</b> — Mausrad zoomt, mittlere Maustaste schiebt</li>
@@ -399,7 +399,7 @@ const S = {
   pressure:0.55,
   cap:'fat',
   cleanEdges:false,      // true = kein Overspray/Gedrizzel außerhalb des Kerns (cleane Kanten)
-  solid:false,           // true = voll deckend (100%), false = Realismus (Wand scheint durch, 86%)
+  solid:true,            // true = voll deckend (100%, Standard), false = Realismus (Wand scheint durch, 86%)
   erase:false,           // true = Radier-Modus (wischt weg statt zu malen) – wirkt mit JEDEM Werkzeug
   // Dagger (schräge Dose): Modus + Cone-Parameter
   dagMode:'free',        // 'free' = Freihand (feste Rad-Richtung), 'curve' = gebogene Bahn
