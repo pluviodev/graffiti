@@ -296,6 +296,7 @@
 <div id="whatsNew" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;width:min(300px,calc(100vw - 24px));box-sizing:border-box;background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:16px;font-size:14px;line-height:1.5;">
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
   <ul style="margin:0 0 14px;padding-left:18px;">
+    <li>📤 <b>Direkt-Upload</b> — „Aktuelles Bild hochladen" lädt sauber aus der App (kein Screenshot nötig)</li>
     <li>🎨 <b>Deckend-Schalter</b> — voll deckende Farbe (100%) statt durchscheinender Wand</li>
     <li>🌫️ <b>Nebeln</b> — Dose weit weg: weicher Dunst für Fades & Wolken</li>
     <li>🧽 <b>Radierer = Farbe</b> — wischt jetzt mit jedem Werkzeug (Linie, Kurve, Bogen …)</li>
@@ -1643,8 +1644,16 @@ function pickImagePng(){
   });
 }
 
-async function uploadArtwork({mode, battleWeek=null, battleWord=null}){
-  const imageBase64 = await pickImagePng();
+// aktuelles Bild (Wand + Paint) als sauberes PNG-DataURL – Direkt-Upload ohne Umweg über Datei/Screenshot
+function captureCompositePng(){
+  const t=document.createElement('canvas'); t.width=W; t.height=H; const tx=t.getContext('2d');
+  tx.drawImage(bg,0,0); tx.drawImage(paint,0,0);
+  return t.toDataURL('image/png');
+}
+
+async function uploadArtwork({mode, battleWeek=null, battleWord=null, source='canvas'}){
+  // 'canvas' = sauberes PNG direkt aus der App (empfohlen); 'file' = fertige Datei von der Festplatte
+  const imageBase64 = source==='file' ? await pickImagePng() : captureCompositePng();
   if(!imageBase64) return;                      // keine Datei gewählt / abgebrochen
   const nickname = prompt('Dein Künstlername:', getNick());
   if(nickname===null) return;
@@ -1720,8 +1729,9 @@ function galCard(e, opts){
 
 async function renderHof(){
   document.getElementById('galTitle').textContent='Hall of Fame';
-  document.getElementById('galBar').innerHTML='<button class="act" id="hofUpload">Mein Bild hochladen</button> '+modBtnHtml();
-  document.getElementById('hofUpload').onclick=async ()=>{ await uploadArtwork({mode:'hall'}); renderHof(); };
+  document.getElementById('galBar').innerHTML='<button class="act" id="hofUpload">Aktuelles Bild hochladen</button> <button class="act" id="hofUploadFile" title="Fertige Datei von der Festplatte – bitte kein Screenshot (Nachschärfen erzeugt Farb-Artefakte!)">Datei…</button> '+modBtnHtml();
+  document.getElementById('hofUpload').onclick=async ()=>{ await uploadArtwork({mode:'hall', source:'canvas'}); renderHof(); };
+  document.getElementById('hofUploadFile').onclick=async ()=>{ await uploadArtwork({mode:'hall', source:'file'}); renderHof(); };
   wireModBtn(renderHof);
   const grid=document.getElementById('galGrid'); grid.innerHTML='Lädt…';
   const rows=await fetchEntries('mode=eq.hall&order=created_at.desc&limit=200');
@@ -1777,9 +1787,10 @@ async function renderBattle(){
   const cur = battleWeekIndex(new Date());
   const word = BATTLE_WORDS[((cur%BATTLE_WORDS.length)+BATTLE_WORDS.length)%BATTLE_WORDS.length];
   document.getElementById('galTitle').textContent = `Battle · „${word}" (diese Woche)`;
-  document.getElementById('galBar').innerHTML = '<button class="act" id="bUpload">Mein Battle-Bild hochladen</button> '+modBtnHtml();
+  document.getElementById('galBar').innerHTML = '<button class="act" id="bUpload">Aktuelles Bild hochladen</button> <button class="act" id="bUploadFile" title="Fertige Datei von der Festplatte – bitte kein Screenshot (Nachschärfen erzeugt Farb-Artefakte!)">Datei…</button> '+modBtnHtml();
   wireModBtn(renderBattle);
-  document.getElementById('bUpload').onclick=async ()=>{ await uploadArtwork({mode:'battle', battleWeek:cur, battleWord:word}); renderBattle(); };
+  document.getElementById('bUpload').onclick=async ()=>{ await uploadArtwork({mode:'battle', battleWeek:cur, battleWord:word, source:'canvas'}); renderBattle(); };
+  document.getElementById('bUploadFile').onclick=async ()=>{ await uploadArtwork({mode:'battle', battleWeek:cur, battleWord:word, source:'file'}); renderBattle(); };
   const grid=document.getElementById('galGrid'); grid.innerHTML='Lädt…';
   const [rows, votes] = await Promise.all([
     fetchEntries(`mode=eq.battle&battle_week=eq.${cur}&order=created_at.desc&limit=200`),
