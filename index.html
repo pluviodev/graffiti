@@ -499,9 +499,10 @@ function coreDab(x,y,r){ const cf=coreFrac(); if(cf<=0.01) return;
 // Sprüh-Körnung um einen Punkt in den Puffer – Dichte & Deckung steigen mit Druck
 function speckle(x,y,r){
   noteY(y-r); noteY(y+r);
+  if(S.cleanEdges) return;   // cleane Kanten: kein Randring/Overspray – der solide Kern liefert die Kante (sonst stempelt jeder Dab einen scharfen Kreis -> konzentrische Ringe)
   const cap=CAPS[S.cap], p=S.pressure, cf=coreFrac();
   const n=Math.round(r*cap.density*(0.6+p*2.4));
-  const rimMax = S.cleanEdges ? r*cf*1.04 : r*(1.06+cap.spread*0.25);
+  const rimMax = r*(1.06+cap.spread*0.25);
   const band=Math.max(1e-3, rimMax-r*cf);
   for(let i=0;i<n;i++){
     const ang=Math.random()*TAU, t=Math.random();
