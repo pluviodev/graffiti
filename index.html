@@ -154,6 +154,7 @@
       <label>Cap</label>
       <select id="cap"></select>
       <label class="dl" title="Aus = feiner Nebel/Overspray außerhalb der Linie. Ein = cleane Kanten."><input type="checkbox" id="cleanEdges"> Clean</label>
+      <label class="dl" title="Aus = Realismus (Wand scheint durch). Ein = voll deckend, Farbe deckt komplett."><input type="checkbox" id="solidPaint"> Deckend</label>
     </div>
 
     <div class="grp" id="dagGrp" style="display:none">
@@ -295,6 +296,7 @@
 <div id="whatsNew" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;width:min(300px,calc(100vw - 24px));box-sizing:border-box;background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:16px;font-size:14px;line-height:1.5;">
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
   <ul style="margin:0 0 14px;padding-left:18px;">
+    <li>🎨 <b>Deckend-Schalter</b> — voll deckende Farbe (100%) statt durchscheinender Wand</li>
     <li>🌫️ <b>Nebeln</b> — Dose weit weg: weicher Dunst für Fades & Wolken</li>
     <li>🧽 <b>Radierer = Farbe</b> — wischt jetzt mit jedem Werkzeug (Linie, Kurve, Bogen …)</li>
     <li>🔍 <b>Zoom & Pan</b> — Mausrad zoomt, mittlere Maustaste schiebt</li>
@@ -382,6 +384,7 @@ Object.entries(CAPS).forEach(([k,c])=>{
 });
 capSel.value='fat';
 document.getElementById('cleanEdges').addEventListener('change', e=>{ S.cleanEdges = e.target.checked; });
+document.getElementById('solidPaint').addEventListener('change', e=>{ S.solid = e.target.checked; });
 
 //------------------------------------------------------------------
 // State
@@ -395,6 +398,7 @@ const S = {
   pressure:0.55,
   cap:'fat',
   cleanEdges:false,      // true = kein Overspray/Gedrizzel außerhalb des Kerns (cleane Kanten)
+  solid:false,           // true = voll deckend (100%), false = Realismus (Wand scheint durch, 86%)
   erase:false,           // true = Radier-Modus (wischt weg statt zu malen) – wirkt mit JEDEM Werkzeug
   // Dagger (schräge Dose): Modus + Cone-Parameter
   dagMode:'free',        // 'free' = Freihand (feste Rad-Richtung), 'curve' = gebogene Bahn
@@ -481,8 +485,8 @@ function withMask(ctx, fn){
 //------------------------------------------------------------------
 // aktueller Sprühradius (Cap × Druck)
 function curR(){ return CAPS[S.cap].radius*(0.55+S.pressure*0.95); }
-// Puffer-Deckkraft: fix, damit „fast solide" nie ganz zuläuft (Wand bleibt sichtbar)
-function fullAlpha(){ return 0.86; }
+// Puffer-Deckkraft: Realismus = 0.86 (Wand scheint durch), Deckend = 1.0 (volle Deckung)
+function fullAlpha(){ return S.solid ? 1.0 : 0.86; }
 
 // Druck -> Anteil solider Kern (0 = reiner Nebel, 1 = volle Linie), stufenlos
 function coreFrac(){ return Math.pow(clamp((S.pressure-0.12)/0.88,0,1), 1.4); }
