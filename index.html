@@ -301,20 +301,16 @@
 </div>
 <div id="whatsNew" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;width:min(300px,calc(100vw - 24px));box-sizing:border-box;background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:16px;font-size:14px;line-height:1.5;">
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
-  <ul style="margin:0 0 14px;padding-left:18px;">
-    <li>🕳️ <b>Käfig mit Aussparungen</b> — Bereiche hinzufügen/abziehen, Rechteck/Ellipse aufziehen, Löcher schützen (Fenster & Co.)</li>
-    <li>📤 <b>Direkt-Upload</b> — „Aktuelles Bild hochladen" lädt sauber aus der App (kein Screenshot nötig)</li>
-    <li>🎨 <b>Deckend ist jetzt Standard</b> — solide Farbe ohne Sprenkel (v.a. beim Zoom); für den durchscheinenden Realismus-Look „Deckend" abwählen</li>
-    <li>🌫️ <b>Nebeln</b> — Dose weit weg: weicher Dunst für Fades & Wolken</li>
-    <li>🧽 <b>Radierer = Farbe</b> — wischt jetzt mit jedem Werkzeug (Linie, Kurve, Bogen …)</li>
-    <li>🔍 <b>Zoom & Pan</b> — Mausrad zoomt, mittlere Maustaste schiebt</li>
-    <li>✨ <b>Clean-Schalter</b> — Overspray aus für saubere Kanten</li>
-    <li>💀 <b>Ghul Spezial Cap</b> — der dünnste Cap überhaupt</li>
-    <li>🪣 <b>Echter Farbeimer</b> — Flächen beliebig umfärben</li>
-    <li>🎨 <b>Eigene Farbslots</b> — deine gewählten Farben bleiben</li>
-    <li>💾 <b>Speichern & Weitermachen</b> — mehrere Skizzen lokal</li>
-    <li>🏆 <b>Hall of Fame</b> — lad deine Werke hoch, für alle sichtbar</li>
-    <li>⚔️ <b>Battle-Modus</b> — jede Woche ein neues Wort, malen & voten</li>
+  <ul style="margin:0 0 12px;padding-left:18px;">
+    <li>🕳️ <b>Käfig mit Aussparungen</b> — Bereiche hinzufügen/abziehen, Rechteck/Ellipse aufziehen, Löcher (Fenster, Waschbecken …) bleiben geschützt</li>
+    <li>🧱 <b>Neue Wände</b> — Toiletten, Planetarium, Backsteinmauer & Schacht (jetzt 17 Motive)</li>
+    <li>🎨 <b>Farbe deckt jetzt voll</b> — solide Deckung als Standard (kein Wand-Durchschein/Sprenkel); für den Realismus-Look „Deckend" abwählen</li>
+  </ul>
+  <div style="margin:0 0 6px;font-size:12px;opacity:.6;">Außerdem an Bord</div>
+  <ul style="margin:0 0 14px;padding-left:18px;font-size:13px;opacity:.85;">
+    <li>🪣 Echter Farbeimer · 🌫️ Nebeln · ✨ Clean-Kanten · 💀 Ghul-Cap</li>
+    <li>🔍 Zoom &amp; Pan · 🧽 Radierer mit jedem Werkzeug · 🎨 eigene Farbslots</li>
+    <li>💾 Speichern &amp; Weitermachen · 🏆 Hall of Fame · ⚔️ Battle</li>
   </ul>
   <button class="act" id="whatsNewBtn" style="width:100%;font-size:15px;padding:8px;">💣 Bombe!</button>
 </div>
@@ -1885,8 +1881,8 @@ document.getElementById('battleBtn').addEventListener('click', ()=>renderBattle(
 // „Was ist neu"-Popup – einmal pro Gerät (Version hochzählen für neue Feature-Runden)
 (function(){
   const wn=document.getElementById('whatsNew'); if(!wn) return;
-  if(!localStorage.getItem('hs_whatsnew_v2')) wn.style.display='block';
-  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v2','1'); wn.style.display='none'; });
+  if(!localStorage.getItem('hs_whatsnew_v3')) wn.style.display='block';
+  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v3','1'); wn.style.display='none'; });
   const openBtn=document.getElementById('whatsNewOpen');
   if(openBtn) openBtn.addEventListener('click', ()=>{ wn.style.display='block'; });   // jederzeit wieder anzeigen
 })();
