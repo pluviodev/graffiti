@@ -212,14 +212,20 @@
 
     <div class="grp">
       <label>Bereich</label>
-      <button class="act iconbtn" id="maskBtn" title="Wand-Rand anzeigen: aus (Klick = an)">
+      <button class="act iconbtn" id="maskBtn" title="Käfig-Rand anzeigen: aus (Klick = an)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="1" stroke-dasharray="3 3"/></svg></button>
-      <button class="act iconbtn" id="editMaskBtn" title="Malbereich anpassen (Ecken ziehen)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10"/><circle cx="7" cy="7" r="1.8" fill="currentColor" stroke="none"/><circle cx="17" cy="7" r="1.8" fill="currentColor" stroke="none"/><circle cx="7" cy="17" r="1.8" fill="currentColor" stroke="none"/><circle cx="17" cy="17" r="1.8" fill="currentColor" stroke="none"/></svg></button>
-      <button class="act iconbtn" id="drawMaskBtn" title="Eigenen Käfig zeichnen (Punkte klicken)">
+      <button class="act iconbtn" id="opBtn" title="Modus: Bereich hinzufügen (Klick = Aussparung)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="12" y1="9" x2="12" y2="15"/></svg></button>
+      <button class="act iconbtn" id="boxBtn" title="Rechteck/Ellipse aufziehen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="7" width="14" height="10"/><path d="M3 5l3 0M3 5l0 3"/></svg></button>
+      <button class="act iconbtn" id="drawMaskBtn" title="Käfig-Polygon zeichnen (Punkte klicken)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-3.5L15 6.5l2.5 2.5L7.5 19z"/><path d="M14 7.5 16.5 5 19 7.5 16.5 10z"/></svg></button>
-      <button class="act iconbtn" id="roundBtn" title="Runder Käfig (Ellipse): aus (Klick = an)">
+      <button class="act iconbtn" id="roundBtn" title="Aufziehen als Ellipse: aus (Klick = an)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="8.5" ry="5.5"/></svg></button>
+      <button class="act iconbtn" id="undoMaskBtn" title="Letzte Käfig-Form zurück">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7 4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-1"/></svg></button>
+      <button class="act iconbtn" id="clearMaskBtn" title="Käfig leeren (ganze Fläche)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 12h8l1-12"/></svg></button>
       <button class="act iconbtn" id="exportMaskBtn" title="Bereiche exportieren (JSON)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4H7a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M14 4v4h4"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg></button>
     </div>
@@ -296,6 +302,7 @@
 <div id="whatsNew" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;width:min(300px,calc(100vw - 24px));box-sizing:border-box;background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:16px;font-size:14px;line-height:1.5;">
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
   <ul style="margin:0 0 14px;padding-left:18px;">
+    <li>🕳️ <b>Käfig mit Aussparungen</b> — Bereiche hinzufügen/abziehen, Rechteck/Ellipse aufziehen, Löcher schützen (Fenster & Co.)</li>
     <li>📤 <b>Direkt-Upload</b> — „Aktuelles Bild hochladen" lädt sauber aus der App (kein Screenshot nötig)</li>
     <li>🎨 <b>Deckend ist jetzt Standard</b> — solide Farbe ohne Sprenkel (v.a. beim Zoom); für den durchscheinenden Realismus-Look „Deckend" abwählen</li>
     <li>🌫️ <b>Nebeln</b> — Dose weit weg: weicher Dunst für Fades & Wolken</li>
@@ -414,18 +421,19 @@ const S = {
   stationary:0,
   // Linie/Kurve
   pts:[],
-  // Maske (Wand-Bereich): null = ganze Fläche, sonst Polygon [[x,y],...] (Box od. frei gezeichnet)
-  mask:null,
-  maskRound:false,    // true = Ellipse in der Box statt Rechteck
+  // Käfig (Malbereich): leere Liste = ganze Fläche. Form: {kind,pts,op}
+  maskShapes:[],
+  maskOp:'add',       // Modus der nächsten Form: 'add' (Bereich) | 'sub' (Aussparung)
   showMask:false,
-  drawMask:false,     // true = eigenen Käfig per Klick zeichnen
-  maskPts:[],         // Punkte des in Arbeit befindlichen Käfigs [{x,y},...]
-  editMask:false,     // Malbereich-Kasten anpassen
+  drawMask:false,     // Polygon per Klick zeichnen aktiv
+  maskPts:[],         // Punkte des in Arbeit befindlichen Polygons [{x,y},...]
+  drawRound:false,    // Aufzieh-Werkzeug: Ellipse statt Rechteck
+  boxDraw:false,      // Rechteck/Ellipse-Aufziehen aktiv
+  boxStart:null,      // erste Ecke beim Aufziehen {x,y}
   fillTol:50,         // Füllen: Toleranz (0 = eng/auslauf-sicher .. 100 = aggressiv durch Nebel)
 };
 
 const drips = [];   // aktive Tropfen
-let maskDrag=null;   // {mode:'corner'|'move', idx?, x?, y?} beim Anpassen
 
 //------------------------------------------------------------------
 // Helfer
@@ -448,6 +456,8 @@ function hslToRgb(h,s,l){ let r,g,b;
     r=hue(h+1/3); g=hue(h); b=hue(h-1/3); }
   return [Math.round(r*255),Math.round(g*255),Math.round(b*255)]; }
 
+//<<CAGE-CORE>>
+// reine Funktionen — via tests/cage.test.mjs Node-getestet; KEINE Canvas/DOM-Referenzen hier!
 function pointInPoly(x,y,poly){
   let inside=false;
   for(let i=0,j=poly.length-1;i<poly.length;j=i++){
@@ -456,30 +466,82 @@ function pointInPoly(x,y,poly){
   }
   return inside;
 }
-// Bounding-Box der 4 Maskenpunkte (Basis für die Ellipse)
-function maskBBox(){ const xs=S.mask.map(p=>p[0]), ys=S.mask.map(p=>p[1]);
+// Bounding-Box aus den Punkten einer Form (Basis für Box/Ellipse)
+function shapeBBox(s){
+  const xs=s.pts.map(p=>p[0]), ys=s.pts.map(p=>p[1]);
   const x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys);
-  return {x0,y0,x1,y1, cx:(x0+x1)/2, cy:(y0+y1)/2, rx:Math.max(1,(x1-x0)/2), ry:Math.max(1,(y1-y0)/2)}; }
-// Punkt in Maske? (Ellipse bei S.maskRound, sonst 4-Eck)
-function maskHit(x,y){
-  if(S.maskRound){ const b=maskBBox(); const dx=(x-b.cx)/b.rx, dy=(y-b.cy)/b.ry; return dx*dx+dy*dy<=1; }
-  return pointInPoly(x,y,S.mask);
+  return {x0,y0,x1,y1, cx:(x0+x1)/2, cy:(y0+y1)/2, rx:Math.max(1,(x1-x0)/2), ry:Math.max(1,(y1-y0)/2)};
 }
-// Maskenform in den aktuellen Pfad zeichnen (Ellipse oder Polygon)
-function maskPath(ctx){
-  if(S.maskRound){ const b=maskBBox(); ctx.ellipse(b.cx,b.cy,b.rx,b.ry,0,0,TAU); }
-  else S.mask.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
+// Punkt in EINER Form? (Ellipse / Rechteck / Polygon)
+function shapeHit(s,x,y){
+  if(s.kind==='ellipse'){ const b=shapeBBox(s); const dx=(x-b.cx)/b.rx, dy=(y-b.cy)/b.ry; return dx*dx+dy*dy<=1; }
+  if(s.kind==='box'){ const b=shapeBBox(s); return x>=b.x0 && x<=b.x1 && y>=b.y0 && y<=b.y1; }
+  return pointInPoly(x,y,s.pts);
 }
-function inMask(x,y){ return !S.mask || maskHit(x,y); }
+// Painter-Regel: die LETZTE Form die den Punkt enthält entscheidet (add=innen, sub=außen)
+function inCageShapes(shapes,x,y){
+  if(!shapes || !shapes.length) return true;
+  let inside=false;
+  for(const s of shapes) if(shapeHit(s,x,y)) inside=(s.op==='add');
+  return inside;
+}
+// Bounding-Box = Vereinigung der add-Formen (gemeinsamer Metallic-Horizont)
+function cageBBoxShapes(shapes){
+  const adds=(shapes||[]).filter(s=>s.op==='add'); if(!adds.length) return null;
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const s of adds){ const b=shapeBBox(s);
+    if(b.x0<x0)x0=b.x0; if(b.y0<y0)y0=b.y0; if(b.x1>x1)x1=b.x1; if(b.y1>y1)y1=b.y1; }
+  return {x0,y0,x1,y1, cx:(x0+x1)/2, cy:(y0+y1)/2, rx:Math.max(1,(x1-x0)/2), ry:Math.max(1,(y1-y0)/2)};
+}
+// Altes Käfig-Format (ein Polygon + round-Flag) -> Formliste mit einer add-Form
+function migrateMask(mask, round){
+  if(!mask || !mask.length) return [];
+  if(round){
+    const xs=mask.map(p=>p[0]), ys=mask.map(p=>p[1]);
+    return [{kind:'ellipse', pts:[[Math.min(...xs),Math.min(...ys)],[Math.max(...xs),Math.max(...ys)]], op:'add'}];
+  }
+  return [{kind:'poly', pts:mask.map(p=>[p[0],p[1]]), op:'add'}];
+}
+//<</CAGE-CORE>>
 
-// Zeichnen innerhalb der Maske ausführen
-function withMask(ctx, fn){
-  if(!S.mask){ fn(); return; }
-  ctx.save();
-  ctx.beginPath(); maskPath(ctx); ctx.closePath(); ctx.clip();
-  fn();
-  ctx.restore();
+// --- Käfig: App-Wrapper um den reinen Kern + Canvas-Maske ---
+function hasCage(){ return S.maskShapes.length>0; }
+function inCage(x,y){ return inCageShapes(S.maskShapes,x,y); }
+function cageBBox(){ return cageBBoxShapes(S.maskShapes); }
+function shapePath(ctx,s){
+  if(s.kind==='ellipse'){ const b=shapeBBox(s); ctx.moveTo(b.x1,b.cy); ctx.ellipse(b.cx,b.cy,b.rx,b.ry,0,0,TAU); }
+  else if(s.kind==='box'){ const b=shapeBBox(s); ctx.rect(b.x0,b.y0,b.x1-b.x0,b.y1-b.y0); }
+  else s.pts.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
 }
+// Käfig-Masken-Canvas: add=weiß füllen, sub=ausstanzen, in Reihenfolge. Gecached.
+let _cageCv=null, _cageDirty=true;
+function markCageDirty(){ _cageDirty=true; }
+function cageCanvas(){
+  if(!_cageCv){ _cageCv=document.createElement('canvas'); _cageCv.width=W; _cageCv.height=H; }
+  if(_cageDirty){
+    const cx=_cageCv.getContext('2d'); cx.clearRect(0,0,W,H);
+    for(const s of S.maskShapes){
+      cx.save();
+      cx.globalCompositeOperation = (s.op==='sub') ? 'destination-out' : 'source-over';
+      cx.fillStyle='#fff'; cx.beginPath(); shapePath(cx,s); cx.closePath(); cx.fill();
+      cx.restore();
+    }
+    _cageDirty=false;
+  }
+  return _cageCv;
+}
+// Quell-Canvas auf den Käfig beschneiden (neue Ebene zurück; ohne Käfig unverändert)
+const _maskScratch=document.createElement('canvas'); _maskScratch.width=W; _maskScratch.height=H;
+function cageMask(src){
+  if(!hasCage()) return src;
+  const mx=_maskScratch.getContext('2d'); mx.clearRect(0,0,W,H);
+  mx.drawImage(src,0,0);
+  mx.save(); mx.globalCompositeOperation='destination-in'; mx.drawImage(cageCanvas(),0,0); mx.restore();
+  return _maskScratch;
+}
+function cageData(){ return hasCage() ? cageCanvas().getContext('2d').getImageData(0,0,W,H).data : null; }
+// Extra-Ebene für Tropfen (werden am Ende auf den Käfig beschnitten)
+const _dripLayer=document.createElement('canvas'); _dripLayer.width=W; _dripLayer.height=H;
 
 //------------------------------------------------------------------
 // Sprüh-Kern
@@ -515,11 +577,14 @@ function speckle(x,y,r){
   }
 }
 
-// Maske als Clip auf beliebigen Kontext
-function maskClip(ctx){ if(!S.mask) return; ctx.beginPath(); maskPath(ctx); ctx.closePath(); ctx.clip(); }
-function drawMaskDash(){ if(!(S.showMask&&S.mask)) return;
-  pvx.save(); pvx.setLineDash([10,8]); pvx.lineWidth=2; pvx.strokeStyle=rgba('#00e08a',0.9);
-  pvx.beginPath(); maskPath(pvx); pvx.closePath(); pvx.stroke(); pvx.restore(); }
+// Käfig-Rand zeichnen: add grün, sub rot gestrichelt
+function drawMaskDash(){ if(!(S.showMask && hasCage())) return;
+  pvx.save(); pvx.setLineDash([10,8]); pvx.lineWidth=2;
+  for(const s of S.maskShapes){
+    pvx.strokeStyle = s.op==='sub' ? rgba('#ff4d4d',0.9) : rgba('#00e08a',0.9);
+    pvx.beginPath(); shapePath(pvx,s); pvx.closePath(); pvx.stroke();
+  }
+  pvx.restore(); }
 
 // --- Strich-Puffer -> gleichmäßige Transparenz (Überlappungen laufen nicht zu) ---
 const strokeCv=document.createElement('canvas'); strokeCv.width=W; strokeCv.height=H;
@@ -539,7 +604,7 @@ function noteY(y){ if(sbox){ if(y<sbox.y0)sbox.y0=y; if(y>sbox.y1)sbox.y1=y; } e
 function resetBuf(){ sx.clearRect(0,0,W,H); sbox=null; }
 // vertikale Spanne des Metallic-Verlaufs: Fill = Käfig-Bbox (gemeinsamer Horizont), Schimmer = eigener Strich
 function metalSpan(){
-  if(S.metal.mode==='fill'){ const b=S.mask?maskBBox():{y0:0,y1:H}; return [b.y0,b.y1]; }
+  if(S.metal.mode==='fill'){ const b=cageBBox()||{y0:0,y1:H}; return [b.y0,b.y1]; }
   if(sbox) return [sbox.y0-2, sbox.y1+2];
   return [0,H];
 }
@@ -566,16 +631,16 @@ function eraseReveal(){
   return tintCv;
 }
 function renderFullPreview(){ pvx.clearRect(0,0,W,H); drawMaskDash();
-  if(S.erase){ pvx.save(); maskClip(pvx); pvx.drawImage(eraseReveal(),0,0); pvx.restore(); return; }
+  if(S.erase){ pvx.drawImage(cageMask(eraseReveal()),0,0); return; }
   const src=S.metal?metalStroke():strokeCv;
-  pvx.save(); maskClip(pvx); pvx.globalAlpha=fullAlpha(); pvx.drawImage(src,0,0); pvx.restore(); }
+  pvx.save(); pvx.globalAlpha=fullAlpha(); pvx.drawImage(cageMask(src),0,0); pvx.restore(); }
 function commitFullStroke(){
   if(S.erase){   // Strichform als Alpha aus dem fertigen Bild herausstanzen
-    withMask(px,()=>{ px.save(); px.globalCompositeOperation='destination-out'; px.drawImage(strokeCv,0,0); px.restore(); });
+    px.save(); px.globalCompositeOperation='destination-out'; px.drawImage(cageMask(strokeCv),0,0); px.restore();
     resetBuf(); pvx.clearRect(0,0,W,H); drawPreview(); scheduleAutoSave(); return;
   }
   const src=S.metal?metalStroke():strokeCv;
-  withMask(px,()=>{ px.save(); px.globalAlpha=fullAlpha(); px.drawImage(src,0,0); px.restore(); });
+  px.save(); px.globalAlpha=fullAlpha(); px.drawImage(cageMask(src),0,0); px.restore();
   resetBuf(); pvx.clearRect(0,0,W,H); drawPreview();
   scheduleAutoSave();
 }
@@ -610,14 +675,6 @@ function fogSeg(a,b){ const R=fogR();
 //------------------------------------------------------------------
 // Füllen (ColorDrop): Flood-Fill bis zu den Linien, saubere Kanten
 //------------------------------------------------------------------
-// Käfig als Pixel-Lookup (Alpha>0 = innerhalb); null wenn kein Käfig gesetzt
-function cageAlpha(){
-  if(!S.mask) return null;
-  const c=document.createElement('canvas'); c.width=W; c.height=H;
-  const cx=c.getContext('2d');
-  cx.fillStyle='#fff'; cx.beginPath(); maskPath(cx); cx.closePath(); cx.fill();
-  return cx.getImageData(0,0,W,H).data;
-}
 // Echter Farbeimer: flutet die zusammenhängende Fläche ähnlicher FARBE ab (sx,sy),
 // nicht nur leere Zonen. RGBA-Summenabstand <= tol zählt als "gleiche Fläche".
 // allow(x,y) (optional) begrenzt auf den Käfig. Reine Funktion -> testbar.
@@ -646,7 +703,7 @@ function doFill(p){
   if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
   const tol = 20 + (S.fillTol/100)*400;        // Farbabstand-Toleranz (|dR|+|dG|+|dB|+|dA|, 0..1020)
   const a=px.getImageData(0,0,W,H).data;
-  const cage=cageAlpha();
+  const cage=cageData();
   if(cage && cage[(sy0*W+sx0)*4+3]===0){
     document.getElementById('status').innerHTML='<b>Füllen</b> · außerhalb des Käfigs – tippe innen';
     return;
@@ -685,7 +742,7 @@ function maybeSpawnDrip(x,y){
   if(Math.random() < chance){
     const dropX = x + (Math.random()-0.5)*r*0.4;
     const dropY = y + r*0.35;
-    if(!inMask(dropX,dropY)) return;
+    if(!inCage(dropX,dropY)) return;
     // Tropfen NUR starten, wo wirklich Farbe im Strich-Puffer liegt (sonst „entspringt aus dem Nichts")
     const a = sx.getImageData(Math.round(dropX), Math.round(dropY), 1, 1).data[3];
     if(a < 40) return;
@@ -702,26 +759,26 @@ function maybeSpawnDrip(x,y){
 
 function updateDrips(){
   if(!drips.length) return;
-  withMask(px, ()=>{
-    for(let i=drips.length-1;i>=0;i--){
-      const d = drips[i];
-      d.speed += d.accel;
-      const ny = d.y + d.speed;
-      const nx = d.x;                                    // gerade nach unten
-      const prog = d.traveled/d.maxLen;
-      const w = Math.max(0.5, d.w*(1-prog*0.85));
-      px.strokeStyle = rgba(d.color, 0.5);
-      px.lineWidth = w; px.lineCap='round';
-      px.beginPath(); px.moveTo(d.x,d.y); px.lineTo(nx,ny); px.stroke();
-      d.x=nx; d.y=ny; d.traveled += d.speed;
-      if(d.traveled>=d.maxLen || d.y>H+20 || !inMask(d.x,d.y)){
-        // kleiner Tropfen-Kopf am Ende
-        px.fillStyle = rgba(d.color,0.5);
-        px.beginPath(); px.arc(d.x,d.y,Math.max(0.6,w*0.9),0,TAU); px.fill();
-        drips.splice(i,1);
-      }
+  const dl=_dripLayer.getContext('2d'); dl.clearRect(0,0,W,H);
+  for(let i=drips.length-1;i>=0;i--){
+    const d = drips[i];
+    d.speed += d.accel;
+    const ny = d.y + d.speed;
+    const nx = d.x;                                    // gerade nach unten
+    const prog = d.traveled/d.maxLen;
+    const w = Math.max(0.5, d.w*(1-prog*0.85));
+    dl.strokeStyle = rgba(d.color, 0.5);
+    dl.lineWidth = w; dl.lineCap='round';
+    dl.beginPath(); dl.moveTo(d.x,d.y); dl.lineTo(nx,ny); dl.stroke();
+    d.x=nx; d.y=ny; d.traveled += d.speed;
+    if(d.traveled>=d.maxLen || d.y>H+20 || !inCage(d.x,d.y)){
+      // kleiner Tropfen-Kopf am Ende
+      dl.fillStyle = rgba(d.color,0.5);
+      dl.beginPath(); dl.arc(d.x,d.y,Math.max(0.6,w*0.9),0,TAU); dl.fill();
+      drips.splice(i,1);
     }
-  });
+  }
+  px.drawImage(cageMask(_dripLayer),0,0);
 }
 
 //------------------------------------------------------------------
@@ -734,7 +791,7 @@ function smudge(x0,y0,x1,y1){
   for(let s=1;s<=steps;s++){
     const t=s/steps;
     const x=x0+(x1-x0)*t, y=y0+(y1-y0)*t;
-    if(!inMask(x,y)) continue;
+    if(!inCage(x,y)) continue;
     px.save();
     px.beginPath(); px.arc(x,y,R,0,TAU); px.clip();
     px.globalAlpha=0.5;
@@ -831,10 +888,7 @@ function commitDagger(a,c,b){ pushUndo();               // Kurve: Cone folgt der
 // Vorschau (Rubber-Band)
 function drawPreview(){
   pvx.clearRect(0,0,W,H);
-  if(S.showMask && S.mask){
-    pvx.save(); pvx.setLineDash([10,8]); pvx.lineWidth=2; pvx.strokeStyle=rgba('#00e08a',0.9);
-    pvx.beginPath(); maskPath(pvx); pvx.closePath(); pvx.stroke(); pvx.restore();
-  }
+  if(S.showMask) drawMaskDash();
   const isLineish=S.tool==='line' || (S.tool==='dagger' && S.dagMode==='line');
   const isCurveish=S.tool==='curve' || (S.tool==='dagger' && S.dagMode==='curve');
   if((isLineish||isCurveish) && S.pts.length){
@@ -850,37 +904,44 @@ function drawPreview(){
     // Punkte markieren
     S.pts.forEach(p=>{ pvx.fillStyle='#fff'; pvx.beginPath(); pvx.arc(p.x,p.y,4,0,TAU); pvx.fill(); });
   }
-  // Malbereich anpassen: Umriss (Ellipse/Rechteck) + Eck-Griffe (definieren immer die Box)
-  if(S.editMask && S.mask){
-    pvx.save();
-    pvx.setLineDash([]); pvx.lineWidth=2; pvx.strokeStyle='#00e08a';
-    pvx.beginPath(); maskPath(pvx); pvx.closePath(); pvx.stroke();
-    if(S.maskRound){ // Box gestrichelt andeuten, damit die Griffe verständlich sind
-      const b=maskBBox(); pvx.setLineDash([5,6]); pvx.strokeStyle=rgba('#00e08a',0.45);
-      pvx.strokeRect(b.x0,b.y0,b.x1-b.x0,b.y1-b.y0); pvx.setLineDash([]);
-    }
-    S.mask.forEach(p=>{ pvx.fillStyle='#00e08a'; pvx.strokeStyle='#04120c'; pvx.lineWidth=2;
-      pvx.fillRect(p[0]-10,p[1]-10,20,20); pvx.strokeRect(p[0]-10,p[1]-10,20,20); });
-    pvx.restore();
+  // Rechteck/Ellipse aufziehen: Live-Vorschau
+  if(S.boxDraw && S.boxStart){
+    const a=S.boxStart, b=S.cur;
+    pvx.save(); pvx.setLineDash([6,6]); pvx.lineWidth=2;
+    pvx.strokeStyle = S.maskOp==='sub' ? '#ff4d4d' : '#00e08a';
+    pvx.beginPath();
+    if(S.drawRound){ const cx=(a.x+b.x)/2, cy=(a.y+b.y)/2, rx=Math.max(1,Math.abs(b.x-a.x)/2), ry=Math.max(1,Math.abs(b.y-a.y)/2);
+      pvx.ellipse(cx,cy,rx,ry,0,0,TAU); }
+    else pvx.rect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(b.x-a.x),Math.abs(b.y-a.y));
+    pvx.stroke(); pvx.restore();
   }
-  // Eigenen Käfig zeichnen: Linienzug + Gummiband + Snap-Anzeige am Start
+  // Käfig-Polygon zeichnen: Linienzug + Gummiband + Snap-Anzeige am Start
   if(S.drawMask && S.maskPts.length){
+    const col = S.maskOp==='sub' ? '#ff4d4d' : '#00e08a';
     const near = S.maskPts.length>=3 && dist(S.cur,S.maskPts[0])<MASK_SNAP;
     pvx.save();
-    pvx.strokeStyle='#00e08a'; pvx.lineWidth=2; pvx.setLineDash([]);
+    pvx.strokeStyle=col; pvx.lineWidth=2; pvx.setLineDash([]);
     pvx.beginPath(); pvx.moveTo(S.maskPts[0].x,S.maskPts[0].y);
     for(let i=1;i<S.maskPts.length;i++) pvx.lineTo(S.maskPts[i].x,S.maskPts[i].y);
     pvx.lineTo(near?S.maskPts[0].x:S.cur.x, near?S.maskPts[0].y:S.cur.y);   // Gummiband (snappt an Start)
     pvx.stroke();
-    S.maskPts.forEach((q,i)=>{ pvx.fillStyle=(i===0?'#fff':'#00e08a'); pvx.beginPath(); pvx.arc(q.x,q.y,(i===0?6:4),0,TAU); pvx.fill(); });
+    S.maskPts.forEach((q,i)=>{ pvx.fillStyle=(i===0?'#fff':col); pvx.beginPath(); pvx.arc(q.x,q.y,(i===0?6:4),0,TAU); pvx.fill(); });
     if(near){ pvx.strokeStyle='#fff'; pvx.lineWidth=2; pvx.beginPath(); pvx.arc(S.maskPts[0].x,S.maskPts[0].y,11,0,TAU); pvx.stroke(); }
     pvx.restore();
   }
 }
+// Käfig-Formen mutieren (+ Umfärbung nachziehen, speichern, neu zeichnen)
+function commitShape(shape){ S.maskShapes.push(shape); markCageDirty(); saveShapes();
+  if(wallTint) setBackground(S.bg); drawPreview(); updateStatus(); }
+function undoLastShape(){ if(!S.maskShapes.length) return; S.maskShapes.pop();
+  markCageDirty(); saveShapes(); if(wallTint) setBackground(S.bg); drawPreview(); updateStatus(); }
+function clearCage(){ S.maskShapes=[]; markCageDirty(); saveShapes();
+  if(wallTint) setBackground(S.bg); drawPreview(); updateStatus(); }
+
 function finishDrawMask(){
   S.drawMask=false; S.maskPts=[];
-  const b=document.getElementById('drawMaskBtn'); b.classList.remove('active'); b.title='Eigenen Käfig zeichnen (Punkte klicken)';
-  syncRoundBtn(); updateStatus(); drawPreview();
+  const b=document.getElementById('drawMaskBtn'); b.classList.remove('active'); b.title='Käfig-Polygon zeichnen (Punkte klicken)';
+  updateStatus(); drawPreview();
 }
 function cancelDrawMask(){ S.maskPts=[]; finishDrawMask(); }
 
@@ -933,11 +994,10 @@ preview.addEventListener('pointerdown', e=>{
   }
   const p=pos(e); S.cur=p; S.last=p; S.stationary=0;
 
-  // Eigenen Käfig zeichnen: Punkte setzen, am Startpunkt schließen (snap)
+  // Käfig-Polygon zeichnen: Punkte setzen, am Startpunkt schließen (snap)
   if(S.drawMask){
     if(S.maskPts.length>=3 && dist(p,S.maskPts[0])<MASK_SNAP){
-      S.mask = S.maskPts.map(q=>[Math.round(q.x),Math.round(q.y)]);
-      S.maskRound=false; saveRound(); saveMask();
+      commitShape({kind:'poly', pts:S.maskPts.map(q=>[Math.round(q.x),Math.round(q.y)]), op:S.maskOp});
       finishDrawMask();
     } else {
       S.maskPts.push({x:p.x,y:p.y}); drawPreview();
@@ -945,15 +1005,8 @@ preview.addEventListener('pointerdown', e=>{
     return;
   }
 
-  // Malbereich anpassen: Ecke greifen oder Kasten verschieben
-  if(S.editMask && S.mask){
-    let hit=-1;
-    for(let i=0;i<S.mask.length;i++){ if(Math.abs(p.x-S.mask[i][0])<18 && Math.abs(p.y-S.mask[i][1])<18){ hit=i; break; } }
-    if(hit>=0) maskDrag={mode:'corner', idx:hit};
-    else if(maskHit(p.x,p.y)) maskDrag={mode:'move', x:p.x, y:p.y};
-    else maskDrag=null;
-    return;
-  }
+  // Rechteck/Ellipse aufziehen: erste Ecke merken
+  if(S.boxDraw){ S.boxStart={x:p.x,y:p.y}; return; }
 
   if(S.tool==='fill'){
     doFill(p);
@@ -988,15 +1041,7 @@ preview.addEventListener('pointermove', e=>{
   if(gestureActive){ if(activePointers.size>=2) handlePinch(); return; }   // Zoom/Pan
   const p=pos(e);
   if(S.drawMask){ S.cur=p; drawPreview(); return; }
-  if(S.editMask){
-    if(maskDrag){
-      if(maskDrag.mode==='corner'){ S.mask[maskDrag.idx]=[clamp(p.x,0,W), clamp(p.y,0,H)]; }
-      else { const dx=p.x-maskDrag.x, dy=p.y-maskDrag.y; maskDrag.x=p.x; maskDrag.y=p.y;
-        S.mask.forEach(q=>{ q[0]=clamp(q[0]+dx,0,W); q[1]=clamp(q[1]+dy,0,H); }); }
-      drawPreview();
-    }
-    return;
-  }
+  if(S.boxDraw){ S.cur=p; if(S.boxStart) drawPreview(); return; }
   if(S.drawing){
     if(S.tool==='smudge'){ smudge(S.last.x,S.last.y,p.x,p.y); }
     else if(S.tool==='spray'){
@@ -1020,9 +1065,14 @@ preview.addEventListener('pointermove', e=>{
 function endStroke(e){
   if(e && activePointers.has(e.pointerId)) activePointers.delete(e.pointerId);
   if(activePointers.size<2){ gestureActive=false; gLastMid=null; }
-  if(maskDrag){ maskDrag=null; saveMask();
-    if(wallTint && S.mask) setBackground(S.bg);   // Färbung an neuen Bereich anpassen
-    drawPreview(); return; }
+  if(S.boxDraw && S.boxStart){
+    const a=S.boxStart, b=S.cur;
+    if(Math.abs(a.x-b.x)>3 && Math.abs(a.y-b.y)>3){
+      commitShape({kind:S.drawRound?'ellipse':'box',
+        pts:[[Math.round(a.x),Math.round(a.y)],[Math.round(b.x),Math.round(b.y)]], op:S.maskOp});
+    }
+    S.boxStart=null; drawPreview(); return;
+  }
   if(S.drawing){
     S.drawing=false;
     if(S.tool==='spray' || S.tool==='fog' || (S.tool==='dagger' && S.dagMode==='free')) commitFullStroke();
@@ -1111,29 +1161,32 @@ const BG_ROUND_DEFAULT = {
 };
 const MASK_SNAP=14;   // Klick-Radius zum Schließen am Startpunkt
 function validPoly(m){ return Array.isArray(m)&&m.length>=3&&m.every(p=>Array.isArray(p)&&p.length===2); }
-function loadMask(id){
-  try{ const m=JSON.parse(localStorage.getItem('graffiti_mask_'+id)); if(validPoly(m)) return m; }catch(e){}
-  const d=BG_MASKS_DEFAULT[id]; return d ? d.map(p=>p.slice()) : null;
+function validShapes(a){ return Array.isArray(a)&&a.every(s=>s&&Array.isArray(s.pts)&&(s.op==='add'||s.op==='sub')); }
+// Formliste laden: neuer Key -> alter Polygon-Key (migriert) -> eingebackener Default (migriert)
+function loadShapes(id){
+  try{ const a=JSON.parse(localStorage.getItem('graffiti_shapes_'+id)); if(validShapes(a)) return a; }catch(e){}
+  try{ const m=JSON.parse(localStorage.getItem('graffiti_mask_'+id));
+       if(validPoly(m)) return migrateMask(m, localStorage.getItem('graffiti_round_'+id)==='1'); }catch(e){}
+  const d=BG_MASKS_DEFAULT[id];
+  return d ? migrateMask(d.map(p=>p.slice()), !!BG_ROUND_DEFAULT[id]) : [];
 }
-function saveMask(){ if(!S.bg||!S.mask) return; try{ localStorage.setItem('graffiti_mask_'+S.bg, JSON.stringify(S.mask)); }catch(e){} }
-function loadRound(id){ const v=localStorage.getItem('graffiti_round_'+id);
-  if(v==='1') return true; if(v==='0') return false; return !!BG_ROUND_DEFAULT[id]; }
-function saveRound(){ if(!S.bg) return; try{ localStorage.setItem('graffiti_round_'+S.bg, S.maskRound?'1':'0'); }catch(e){} }
+function saveShapes(){ if(!S.bg) return;
+  try{ localStorage.setItem('graffiti_shapes_'+S.bg, JSON.stringify(S.maskShapes)); }catch(e){} }
 let customPhoto=false;   // true = eigenes Foto (dann ganze Fläche bemalbar)
 let wallTint=null;       // Hex-Farbe zum Umfärben der Standard-Wand
 const bgImages={};       // id -> geladenes Image
 
 // Färbt die Wand (nur innerhalb der Maske) auf eine Zielfarbe um – Textur/Schattierung bleibt
 function recolorWall(hex){
-  if(!S.mask) return;
+  if(!hasCage()) return;
   const [tr,tg,tb]=hexToRgb(hex); const [th,ts]=rgbToHsl(tr,tg,tb);
-  const xs=S.mask.map(p=>p[0]), ys=S.mask.map(p=>p[1]);
-  const x0=Math.max(0,Math.floor(Math.min(...xs))), x1=Math.min(W,Math.ceil(Math.max(...xs)));
-  const y0=Math.max(0,Math.floor(Math.min(...ys))), y1=Math.min(H,Math.ceil(Math.max(...ys)));
+  const bb=cageBBox(); if(!bb) return;
+  const x0=Math.max(0,Math.floor(bb.x0)), x1=Math.min(W,Math.ceil(bb.x1));
+  const y0=Math.max(0,Math.floor(bb.y0)), y1=Math.min(H,Math.ceil(bb.y1));
   const w=x1-x0, h=y1-y0; if(w<=0||h<=0) return;
   const img=bgx.getImageData(x0,y0,w,h), d=img.data;
   for(let j=0;j<h;j++)for(let i=0;i<w;i++){
-    if(!maskHit(x0+i, y0+j)) continue;
+    if(!inCage(x0+i, y0+j)) continue;
     const o=(j*w+i)*4;
     const l=rgbToHsl(d[o],d[o+1],d[o+2])[2];   // Helligkeit = Textur
     const [nr,ng,nb]=hslToRgb(th, ts, l);
@@ -1148,10 +1201,9 @@ function setBackground(id){
   const img=bgImages[id];
   if(img) bgx.drawImage(img,0,0,W,H);                 // Bild ist 1600×900, füllt Canvas
   // Malbereich: eigenes Foto = ganze Fläche, sonst eingebackener/gespeicherter Käfig
-  S.mask = (id==='photo' && customPhoto) ? null : loadMask(id);
-  S.maskRound = S.mask ? loadRound(id) : false;
-  if(wallTint && S.mask) recolorWall(wallTint);   // Umfärben auf jedem Motiv (innerhalb des Käfigs)
-  syncRoundBtn();
+  S.maskShapes = (id==='photo' && customPhoto) ? [] : loadShapes(id);
+  markCageDirty();
+  if(wallTint && hasCage()) recolorWall(wallTint);   // Umfärben auf jedem Motiv (innerhalb des Käfigs)
   drawPreview();
 }
 
@@ -1169,10 +1221,9 @@ function loadBgImages(cb){
 }
 // Aktuelle Käfige aller Motive als JSON exportieren (zum Einbacken)
 function exportMasks(){
-  const masks={}, round={};
-  ['photo', ...BG_META.map(m=>m.id)].forEach(id=>{ const m=loadMask(id); if(m) masks[id]=m; if(loadRound(id)) round[id]=true; });
-  const out={masks, round};
-  const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+  const shapes={};
+  ['photo', ...BG_META.map(m=>m.id)].forEach(id=>{ const a=loadShapes(id); if(a.length) shapes[id]=a; });
+  const blob=new Blob([JSON.stringify({shapes},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.download='graffiti_bereiche.json'; a.href=URL.createObjectURL(blob); a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
@@ -1270,7 +1321,7 @@ function setPressure(v){ S.pressure=v/100;
 
 document.getElementById('bgSel').addEventListener('change',e=>{ wallTint=null; setBackground(e.target.value); });
 document.getElementById('wallColor').addEventListener('input',e=>{
-  if(!S.mask) return;                       // braucht einen Malbereich zum Umfärben
+  if(!hasCage()) return;                    // braucht einen Malbereich zum Umfärben
   wallTint=e.target.value; setBackground(S.bg);
 });
 document.getElementById('wallReset').addEventListener('click',()=>{ wallTint=null; setBackground(S.bg); });
@@ -1291,32 +1342,33 @@ const CT=(id)=>document.getElementById(id);   // kurz
 document.getElementById('maskBtn').addEventListener('click',e=>{
   const b=e.currentTarget; S.showMask=!S.showMask;
   b.classList.toggle('active', S.showMask);
-  b.title='Wand-Rand anzeigen: '+(S.showMask?'an (Klick = aus)':'aus (Klick = an)'); drawPreview();
+  b.title='Käfig-Rand anzeigen: '+(S.showMask?'an (Klick = aus)':'aus (Klick = an)'); drawPreview();
 });
-document.getElementById('editMaskBtn').addEventListener('click',e=>{
+document.getElementById('opBtn').addEventListener('click', ()=>{ S.maskOp = S.maskOp==='add'?'sub':'add'; syncOpBtn(); drawPreview(); });
+function syncOpBtn(){ const b=document.getElementById('opBtn');
+  const sub=S.maskOp==='sub'; b.classList.toggle('active', sub);
+  b.title='Modus: '+(sub?'Aussparung abziehen (Klick = Bereich)':'Bereich hinzufügen (Klick = Aussparung)'); }
+document.getElementById('boxBtn').addEventListener('click',e=>{
   const b=e.currentTarget;
-  if(!S.mask){ return; }   // nur bei aktivem Wand-Bereich
   if(S.drawMask) cancelDrawMask();
-  S.editMask=!S.editMask;
-  b.classList.toggle('active', S.editMask);
-  b.title = S.editMask ? 'Fertig – Bereich-Ecken ziehen aktiv (Klick = beenden)' : 'Malbereich anpassen (Ecken ziehen)';
+  S.boxDraw=!S.boxDraw; S.boxStart=null;
+  b.classList.toggle('active', S.boxDraw);
+  b.title = S.boxDraw ? 'Aufziehen aktiv – ziehen zum Anlegen (Klick = beenden)' : 'Rechteck/Ellipse aufziehen';
   updateStatus(); drawPreview();
 });
 document.getElementById('drawMaskBtn').addEventListener('click',e=>{
   const b=e.currentTarget;
   if(S.drawMask){ cancelDrawMask(); return; }   // erneut = abbrechen
-  // Bearbeiten-Modus beenden
-  if(S.editMask){ S.editMask=false; const eb=document.getElementById('editMaskBtn'); eb.classList.remove('active'); eb.title='Malbereich anpassen (Ecken ziehen)'; }
+  if(S.boxDraw){ S.boxDraw=false; S.boxStart=null; const bb=document.getElementById('boxBtn'); bb.classList.remove('active'); bb.title='Rechteck/Ellipse aufziehen'; }
   S.drawMask=true; S.maskPts=[];
-  b.classList.add('active'); b.title='Käfig zeichnen – Punkte klicken, am Start schließen (Klick = abbrechen)';
+  b.classList.add('active'); b.title='Polygon zeichnen – Punkte klicken, am Start schließen (Klick = abbrechen)';
   updateStatus(); drawPreview();
 });
-document.getElementById('roundBtn').addEventListener('click',()=>{
-  if(!S.mask) return;                 // nur bei aktivem Malbereich
-  S.maskRound=!S.maskRound; saveRound(); syncRoundBtn(); drawPreview();
-});
+document.getElementById('roundBtn').addEventListener('click',()=>{ S.drawRound=!S.drawRound; syncRoundBtn(); });
 function syncRoundBtn(){ const b=document.getElementById('roundBtn');
-  b.title='Runder Käfig (Ellipse): '+(S.maskRound?'an (Klick = aus)':'aus (Klick = an)'); b.classList.toggle('active', S.maskRound); }
+  b.title='Aufziehen als Ellipse: '+(S.drawRound?'an (Klick = aus)':'aus (Klick = an)'); b.classList.toggle('active', S.drawRound); }
+document.getElementById('undoMaskBtn').addEventListener('click', undoLastShape);
+document.getElementById('clearMaskBtn').addEventListener('click', clearCage);
 document.getElementById('exportMaskBtn').addEventListener('click', exportMasks);
 // Vollbild (Fullscreen-API; auf iPhone-Safari nicht verfügbar -> dort „Zum Startbildschirm")
 document.getElementById('fsBtn').addEventListener('click',()=>{
@@ -1340,7 +1392,9 @@ document.addEventListener('fullscreenchange',()=>{
 addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); }
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){ e.preventDefault(); redo(); }
-  if(e.key==='Escape'){ if(S.drawMask) cancelDrawMask(); S.pts=[]; drawPreview(); }
+  if(e.key==='Escape'){ if(S.drawMask) cancelDrawMask();
+    if(S.boxDraw){ S.boxDraw=false; S.boxStart=null; const bb=document.getElementById('boxBtn'); bb.classList.remove('active'); bb.title='Rechteck/Ellipse aufziehen'; }
+    S.pts=[]; drawPreview(); }
 });
 
 function updateStatus(){
@@ -1359,12 +1413,12 @@ function updateStatus(){
   };
   if(S.drawMask){
     document.getElementById('status').innerHTML =
-      '<b>Käfig zeichnen</b> · klicken setzt Punkte (Form nachziehen) · beim weißen Startpunkt klicken schließt (snappt) · <kbd>Esc</kbd> bricht ab';
+      '<b>'+(S.maskOp==='sub'?'Aussparung':'Bereich')+' zeichnen</b> · klicken setzt Punkte · beim weißen Startpunkt klicken schließt (snappt) · <kbd>Esc</kbd> bricht ab';
     return;
   }
-  if(S.editMask){
+  if(S.boxDraw){
     document.getElementById('status').innerHTML =
-      '<b>Malbereich anpassen</b> · Eck-Punkte ziehen oder in die Fläche fassen zum Verschieben · „✓ Fertig" zum Abschließen';
+      '<b>'+(S.maskOp==='sub'?'Aussparung':'Bereich')+' aufziehen</b> · '+(S.drawRound?'Ellipse':'Rechteck')+' – von Ecke zu Ecke ziehen';
     return;
   }
   const metalTag = S.metal
@@ -1490,6 +1544,7 @@ function updateColorFab(){ const f=document.getElementById('colorFab'); if(!f) r
 //------------------------------------------------------------------
 function boot(){
   fitStage(); markSwatch(); updateStatus(); updateToolFab(); updateColorFab();
+  syncOpBtn(); syncRoundBtn();
   buildBgOptions();
   loadBgImages(()=>{ setBackground('photo'); });
   requestAnimationFrame(loop);
@@ -1814,8 +1869,8 @@ document.getElementById('battleBtn').addEventListener('click', ()=>renderBattle(
 // „Was ist neu"-Popup – einmal pro Gerät (Version hochzählen für neue Feature-Runden)
 (function(){
   const wn=document.getElementById('whatsNew'); if(!wn) return;
-  if(!localStorage.getItem('hs_whatsnew_v1')) wn.style.display='block';
-  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v1','1'); wn.style.display='none'; });
+  if(!localStorage.getItem('hs_whatsnew_v2')) wn.style.display='block';
+  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v2','1'); wn.style.display='none'; });
   const openBtn=document.getElementById('whatsNewOpen');
   if(openBtn) openBtn.addEventListener('click', ()=>{ wn.style.display='block'; });   // jederzeit wieder anzeigen
 })();
