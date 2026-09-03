@@ -651,16 +651,30 @@ function fogR(){ return CAPS[S.cap].radius*(1.6+S.pressure*1.4); }   // weiter w
 function fogSpeckle(x,y){
   const cap=CAPS[S.cap], p=S.pressure, R=fogR();
   noteY(y-R); noteY(y+R);
-  const n=Math.round(R*cap.density*(0.35+p*0.85));      // moderate Punktzahl -> kein sofortiges Zulaufen
+  // Schwache, durchgehende Grund-Tönung füllt die Lücken zwischen den Körnern (killt das Pixel-Korn),
+  // bleibt aber dünn genug fürs „langsam aufbauen".
+  const base=clamp(0.006+0.011*p, 0, 0.022);
+  const bg=sx.createRadialGradient(x,y,0, x,y,R);
+  bg.addColorStop(0, rgba(S.color, base));
+  bg.addColorStop(0.6, rgba(S.color, base*0.5));
+  bg.addColorStop(1, rgba(S.color, 0));
+  sx.fillStyle=bg; sx.beginPath(); sx.arc(x,y,R,0,TAU); sx.fill();
+  // Feiner Dunst aus WEICHEN Tröpfchen (Radialverlauf-Kante statt hartem Kreis -> kein Pixelkorn).
+  const n=Math.round(R*cap.density*(0.30+p*0.75));
   for(let i=0;i<n;i++){
     const ang=Math.random()*TAU;
     // gauß-artige Radiuswahl (Mittel aus 4 Zufallswerten): Wolke ist mittig dicht, außen dünn
     const g=(Math.random()+Math.random()+Math.random()+Math.random())/4;
     const rad=R*g, fall=1-g;                             // fall: 1 in der Mitte .. 0 am weichen Rand
-    const a=clamp((0.04+0.09*p)*fall, 0, 0.16);          // sehr dünn -> realistischer Aufbau über Wiederholung
-    const dotR=0.5+Math.random()*(0.8+cap.radius*0.02);  // feine Tröpfchen, minimal größer bei fetten Caps
-    sx.fillStyle=rgba(S.color,a);
-    sx.beginPath(); sx.arc(x+Math.cos(ang)*rad, y+Math.sin(ang)*rad, dotR, 0, TAU); sx.fill();
+    const cx=x+Math.cos(ang)*rad, cy=y+Math.sin(ang)*rad;
+    const dr=1.3+Math.random()*(1.8+cap.radius*0.03);    // größer als früher -> weiche statt harte Kante
+    const a=clamp((0.05+0.11*p)*fall, 0, 0.18);          // etwas kräftiger je Korn, weil die weiche Kante Alpha „verteilt"
+    const dg=sx.createRadialGradient(cx,cy,0, cx,cy,dr);
+    dg.addColorStop(0,   rgba(S.color, a));
+    dg.addColorStop(0.6, rgba(S.color, a*0.5));
+    dg.addColorStop(1,   rgba(S.color, 0));              // jedes Korn federt lautlos aus
+    sx.fillStyle=dg;
+    sx.beginPath(); sx.arc(cx,cy,dr,0,TAU); sx.fill();
   }
 }
 function fogDab(x,y){ fogSpeckle(x,y); }
