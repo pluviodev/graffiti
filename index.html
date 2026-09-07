@@ -150,6 +150,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 10.5a6 6 0 0 1-12 0C6 9.5 12 3 12 3z"/></svg></button>
       <button class="tool iconbtn" data-tool="outline" title="Outline (Kontur um eine Farbfläche)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" stroke-dasharray="3 3"/></svg></button>
+      <button class="tool iconbtn" data-tool="shadow" title="3D-Schatten (Fläche antippen, Block ziehen)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8h8v8H8z"/><path d="M16 8l4-4M8 8l4-4h8M16 16l4-4V4"/></svg></button>
     </div>
 
     <div class="grp">
@@ -183,6 +185,20 @@
       </select>
       <label class="dl">Dicke</label><input type="range" id="outlineWidth" min="1" max="20" value="6" title="Breite der Kontur-Linie">
       <label class="dl" id="outlineTolLbl">Toleranz</label><input type="range" id="outlineTol" min="0" max="100" value="50" title="Farbabstand der Flächenerkennung (nur Angetippte Fläche / Alle dieser Farbe)">
+    </div>
+
+    <div class="grp" id="shadowGrp" style="display:none">
+      <label>3D-Schatten</label>
+      <select id="shadowModel" title="Fluchtpunkt = Perspektive · Parallel = fester Versatz">
+        <option value="vp">Fluchtpunkt</option>
+        <option value="parallel">Parallel</option>
+      </select>
+      <select id="shadowSource" title="Was wirft den Schatten?">
+        <option value="all">Ganzes Bild (Silhouette)</option>
+        <option value="region">Angetippte Fläche</option>
+        <option value="color">Alle dieser Farbe</option>
+      </select>
+      <label class="dl" id="shadowTolLbl">Toleranz</label><input type="range" id="shadowTol" min="0" max="100" value="50" title="Farbabstand der Flächenerkennung (nur Angetippte Fläche / Alle dieser Farbe)">
     </div>
 
     <div class="grp">
@@ -315,6 +331,7 @@
 <div id="whatsNew" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;width:min(300px,calc(100vw - 24px));box-sizing:border-box;background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:16px;font-size:14px;line-height:1.5;">
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
   <ul style="margin:0 0 12px;padding-left:18px;">
+    <li>📦 <b>3D-Schatten</b> — Fläche antippen, Block mit Fluchtpunkt oder parallel herausziehen (Griffe), liegt hinter der Farbe</li>
     <li>⭕ <b>Outline</b> — Farbfläche antippen, präzise Kontur außen herum · 3 Modi: angetippte Fläche · alle einer Farbe · ganzes Bild (Silhouette)</li>
     <li>🕳️ <b>Käfig mit Aussparungen</b> — Bereiche hinzufügen/abziehen, Rechteck/Ellipse aufziehen, Löcher (Fenster, Waschbecken …) bleiben geschützt</li>
     <li>🧱 <b>Neue Wände</b> — Toiletten, Planetarium, Backsteinmauer & Schacht (jetzt 17 Motive)</li>
@@ -444,6 +461,11 @@ const S = {
   outlineMode:'region',   // Outline: 'region' | 'color' | 'all'
   outlineWidth:6,         // Outline: Linienbreite in px (1..20)
   outlineTol:50,          // Outline: Farbtoleranz der Flächenerkennung (region/color)
+  shadowModel:'vp',       // '3D-Schatten': 'vp' (Fluchtpunkt) | 'parallel'
+  shadowSource:'all',     // 'region' | 'color' | 'all'
+  shadowTol:50,           // Farbtoleranz (region/color)
+  shadowSess:null,        // aktive Sitzung {mask,bb,anchor,grip,vp,depthGrip}
+  shadowDrag:null,        // 'grip' | 'vp' | 'depth' | null
 };
 
 const drips = [];   // aktive Tropfen
@@ -602,6 +624,8 @@ function drawMaskDash(){ if(!(S.showMask && hasCage())) return;
 // --- Strich-Puffer -> gleichmäßige Transparenz (Überlappungen laufen nicht zu) ---
 const strokeCv=document.createElement('canvas'); strokeCv.width=W; strokeCv.height=H;
 const sx=strokeCv.getContext('2d');
+const shadowMaskCv=document.createElement('canvas'); shadowMaskCv.width=W; shadowMaskCv.height=H;
+const shadowBlockCv=document.createElement('canvas'); shadowBlockCv.width=W; shadowBlockCv.height=H;
 
 // --- Metallic (Chrom/Gold/Kupfer): senkrechter Verlauf, per source-atop über den Strich getönt ---
 // Stops: hell -> dunkles Horizont-Band bei ~0.5 -> heller Schimmer -> hell
@@ -763,6 +787,23 @@ function edgeBand(mask, w, h){
 }
 //<</OUTLINE-CORE>>
 
+//<<SHADOW-CORE>>
+// Transform-Liste für den Sweep (pure). parallel = Translationen, vp = Homothetie-Ratios.
+function sweepTransforms(model, params, steps){
+  const out=[];
+  if(model==='parallel'){
+    const dx=params.dx, dy=params.dy;
+    for(let i=0;i<=steps;i++){ const t=i/steps; out.push({k:'t', tx:dx*t, ty:dy*t}); }
+  } else { // 'vp'
+    const depth=params.depth;
+    for(let i=0;i<=steps;i++){ const t=i/steps; out.push({k:'h', r:1-depth*t}); }
+  }
+  return out;
+}
+// Gaplose Schrittzahl aus maximaler Pixel-Verschiebung.
+function sweepSteps(maxShift, stepPx){ return Math.max(1, Math.ceil(maxShift/stepPx)); }
+//<</SHADOW-CORE>>
+
 function doFill(p){
   const sx0=Math.round(p.x), sy0=Math.round(p.y);
   if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
@@ -828,6 +869,123 @@ function doOutline(p){
   for(const i of pts){ const x=i%W, y=(i/W)|0; coreDab(x,y,r); speckle(x,y,r); }
   commitFullStroke();          // zieht cageMask(strokeCv) mit fullAlpha auf px + leert Puffer
   drawPreview(); updateStatus();
+}
+
+// ---- 3D-Schatten ----
+function maskBBox(mask){
+  let x0=W,y0=H,x1=-1,y1=-1;
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){ if(mask[y*W+x]){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } }
+  if(x1<0) return null; return {x0,y0,x1,y1};
+}
+function fillMaskCanvas(cv, mask, color){
+  const cx=cv.getContext('2d'); cx.setTransform(1,0,0,1,0,0); cx.clearRect(0,0,W,H);
+  const img=cx.createImageData(W,H), d=img.data, rgb=hexToRgb(color);
+  for(let i=0;i<W*H;i++){ if(mask[i]){ const j=i*4; d[j]=rgb[0]; d[j+1]=rgb[1]; d[j+2]=rgb[2]; d[j+3]=255; } }
+  cx.putImageData(img,0,0);
+}
+// Parameter + maximale Verschiebung aus den aktuellen Griff-Positionen
+function shadowParams(sess){
+  if(S.shadowModel==='parallel'){
+    const dx=sess.grip.x-sess.anchor.x, dy=sess.grip.y-sess.anchor.y;
+    return {model:'parallel', dx, dy, maxShift:Math.hypot(dx,dy)};
+  }
+  const vp=sess.vp, ax=sess.anchor.x, ay=sess.anchor.y;
+  const ux=vp.x-ax, uy=vp.y-ay, uLen2=(ux*ux+uy*uy)||1;
+  const proj=((sess.depthGrip.x-ax)*ux + (sess.depthGrip.y-ay)*uy)/uLen2;
+  const depth=Math.max(0, Math.min(0.95, proj));
+  let maxD=0;
+  for(const c of [[sess.bb.x0,sess.bb.y0],[sess.bb.x1,sess.bb.y0],[sess.bb.x0,sess.bb.y1],[sess.bb.x1,sess.bb.y1]]){
+    const d=Math.hypot(c[0]-vp.x, c[1]-vp.y); if(d>maxD) maxD=d;
+  }
+  return {model:'vp', vx:vp.x, vy:vp.y, depth, maxShift:depth*maxD};
+}
+// Block per Sweep auf shadowBlockCv bauen (stepPx klein = fein)
+function buildShadowBlock(sess, stepPx){
+  const pm=shadowParams(sess);
+  const steps=Math.min(400, sweepSteps(pm.maxShift, stepPx));
+  const bx=shadowBlockCv.getContext('2d'); bx.setTransform(1,0,0,1,0,0); bx.clearRect(0,0,W,H);
+  const tfs=sweepTransforms(pm.model, pm, steps);
+  for(const tf of tfs){
+    if(tf.k==='t') bx.setTransform(1,0,0,1, tf.tx, tf.ty);
+    else bx.setTransform(tf.r,0,0,tf.r, pm.vx*(1-tf.r), pm.vy*(1-tf.r));
+    bx.drawImage(shadowMaskCv,0,0);
+  }
+  bx.setTransform(1,0,0,1,0,0);
+  return pm;
+}
+function shadowStatus(msg){ const el=document.getElementById('status'); if(el) el.innerHTML='<b>3D-Schatten</b> · '+msg; }
+function doShadowStart(p){
+  const sx0=Math.round(p.x), sy0=Math.round(p.y);
+  if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
+  const cage=cageData();
+  if(cage && cage[(sy0*W+sx0)*4+3]===0){ shadowStatus('außerhalb des Käfigs – tippe innen'); return; }
+  const allow = cage ? (x,y)=>cage[(y*W+x)*4+3]>0 : null;
+  const a=px.getImageData(0,0,W,H).data;
+  let mask;
+  if(S.shadowSource==='all'){ mask=paintedMask(a,W,H,allow); }
+  else {
+    if(a[(sy0*W+sx0)*4+3]===0){ shadowStatus('tippe auf eine Farbfläche'); return; }
+    const tol=20+(S.shadowTol/100)*400;
+    mask = (S.shadowSource==='color') ? colorMask(a,W,H,sx0,sy0,tol,allow) : floodRegion(a,W,H,sx0,sy0,tol,allow);
+  }
+  const bb=maskBBox(mask);
+  if(!bb){ shadowStatus('nichts zum Schattieren gefunden'); return; }
+  const anchor={x:(bb.x0+bb.x1)/2, y:(bb.y0+bb.y1)/2};
+  const diag=Math.hypot(bb.x1-bb.x0, bb.y1-bb.y0)||40, off=Math.max(30, diag*0.5);
+  fillMaskCanvas(shadowMaskCv, mask, S.color);
+  S.shadowSess={ mask, bb, anchor,
+    grip:{x:anchor.x+off, y:anchor.y+off},
+    vp:{x:anchor.x+off*2.2, y:anchor.y+off*2.2},
+    depthGrip:{x:anchor.x+off, y:anchor.y+off} };
+  shadowStatus('Griffe ziehen · außerhalb tippen oder Enter = übernehmen · Esc = abbrechen');
+  drawPreview();
+}
+function shadowHit(p){
+  const sess=S.shadowSess; if(!sess) return null;
+  const near=h=>Math.hypot(p.x-h.x, p.y-h.y)<=14;
+  if(S.shadowModel==='parallel'){ if(near(sess.grip)) return 'grip'; }
+  else { if(near(sess.vp)) return 'vp'; if(near(sess.depthGrip)) return 'depth'; }
+  return null;
+}
+function doShadowDown(p){
+  if(!S.shadowSess){ doShadowStart(p); return; }
+  const hit=shadowHit(p);
+  if(hit){ S.shadowDrag=hit; return; }
+  commitShadow();
+}
+function doShadowMove(p){
+  const sess=S.shadowSess; if(!sess||!S.shadowDrag) return;
+  if(S.shadowDrag==='grip') sess.grip={x:p.x,y:p.y};
+  else if(S.shadowDrag==='vp') sess.vp={x:p.x,y:p.y};
+  else if(S.shadowDrag==='depth') sess.depthGrip={x:p.x,y:p.y};
+  drawPreview();
+}
+function commitShadow(){
+  const sess=S.shadowSess; if(!sess) return;
+  const pm=buildShadowBlock(sess, 1.2);            // fein
+  if(pm.maxShift<1){ cancelShadow(); return; }     // nichts sichtbar
+  pushUndo();
+  px.save(); px.globalCompositeOperation='destination-over'; px.drawImage(cageMask(shadowBlockCv),0,0); px.restore();
+  S.shadowSess=null; S.shadowDrag=null;
+  drawPreview(); updateStatus(); scheduleAutoSave();
+}
+function cancelShadow(){ S.shadowSess=null; S.shadowDrag=null; drawPreview(); updateStatus(); }
+function drawShadowOverlay(){
+  const sess=S.shadowSess; if(!sess) return;
+  buildShadowBlock(sess, 4);                        // grobe Live-Vorschau
+  pvx.save(); pvx.globalAlpha=0.85; pvx.drawImage(cageMask(shadowBlockCv),0,0); pvx.restore();
+  const dot=(x,y,fill)=>{ pvx.fillStyle=fill; pvx.strokeStyle='#000'; pvx.lineWidth=2; pvx.beginPath(); pvx.arc(x,y,8,0,TAU); pvx.fill(); pvx.stroke(); };
+  pvx.save(); pvx.setLineDash([6,6]); pvx.strokeStyle='#fff'; pvx.lineWidth=2;
+  if(S.shadowModel==='parallel'){
+    pvx.beginPath(); pvx.moveTo(sess.anchor.x,sess.anchor.y); pvx.lineTo(sess.grip.x,sess.grip.y); pvx.stroke();
+  } else {
+    pvx.beginPath(); pvx.moveTo(sess.anchor.x,sess.anchor.y); pvx.lineTo(sess.vp.x,sess.vp.y); pvx.stroke();
+  }
+  pvx.setLineDash([]);
+  if(S.shadowModel==='parallel'){ dot(sess.grip.x,sess.grip.y,'#00e08a'); }
+  else { dot(sess.vp.x,sess.vp.y,'#ff9f0a'); dot(sess.depthGrip.x,sess.depthGrip.y,'#00e08a'); }
+  dot(sess.anchor.x,sess.anchor.y,'#fff');
+  pvx.restore();
 }
 
 //------------------------------------------------------------------
@@ -1032,6 +1190,7 @@ function drawPreview(){
     if(near){ pvx.strokeStyle='#fff'; pvx.lineWidth=2; pvx.beginPath(); pvx.arc(S.maskPts[0].x,S.maskPts[0].y,11,0,TAU); pvx.stroke(); }
     pvx.restore();
   }
+  if(S.shadowSess) drawShadowOverlay();
 }
 // Käfig-Formen mutieren (+ Umfärbung nachziehen, speichern, neu zeichnen)
 function commitShape(shape){ S.maskShapes.push(shape); markCageDirty(); saveShapes();
@@ -1115,6 +1274,8 @@ preview.addEventListener('pointerdown', e=>{
     doFill(p);
   } else if(S.tool==='outline'){
     doOutline(p);
+  } else if(S.tool==='shadow'){
+    doShadowDown(p);
   } else if(S.tool==='spray'){
     pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y};
     resetBuf(); bufDab(p.x,p.y); renderFullPreview();
@@ -1145,6 +1306,7 @@ preview.addEventListener('pointermove', e=>{
   if(activePointers.has(e.pointerId)) activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(gestureActive){ if(activePointers.size>=2) handlePinch(); return; }   // Zoom/Pan
   const p=pos(e);
+  if(S.shadowDrag){ doShadowMove(p); return; }
   if(S.drawMask){ S.cur=p; drawPreview(); return; }
   if(S.boxDraw){ S.cur=p; if(S.boxStart) drawPreview(); return; }
   if(S.drawing){
@@ -1170,6 +1332,7 @@ preview.addEventListener('pointermove', e=>{
 function endStroke(e){
   if(e && activePointers.has(e.pointerId)) activePointers.delete(e.pointerId);
   if(activePointers.size<2){ gestureActive=false; gLastMid=null; }
+  if(S.shadowDrag){ S.shadowDrag=null; return; }
   if(S.boxDraw && S.boxStart){
     const a=S.boxStart, b=S.cur;
     if(Math.abs(a.x-b.x)>3 && Math.abs(a.y-b.y)>3){
@@ -1358,6 +1521,8 @@ function selectTool(name){
   const dg=document.getElementById('dagGrp'); if(dg) dg.style.display=(name==='dagger'?'':'none');
   const fg=document.getElementById('fillGrp'); if(fg) fg.style.display=(name==='fill'?'':'none');
   const og=document.getElementById('outlineGrp'); if(og) og.style.display=(name==='outline'?'':'none');
+  const sg=document.getElementById('shadowGrp'); if(sg) sg.style.display=(name==='shadow'?'':'none');
+  S.shadowSess=null; S.shadowDrag=null;
   updateToolFab(); drawPreview(); updateStatus();
 }
 document.querySelectorAll('button.tool').forEach(b=>{ b.addEventListener('click',()=>selectTool(b.dataset.tool)); });
@@ -1379,6 +1544,18 @@ const outlineWidthInp=document.getElementById('outlineWidth');
 if(outlineWidthInp) outlineWidthInp.addEventListener('input',()=>{ S.outlineWidth=+outlineWidthInp.value; });
 const outlineTolInp=document.getElementById('outlineTol');
 if(outlineTolInp) outlineTolInp.addEventListener('input',()=>{ S.outlineTol=+outlineTolInp.value; });
+const shadowModelSel=document.getElementById('shadowModel');
+if(shadowModelSel) shadowModelSel.addEventListener('change',()=>{ S.shadowModel=shadowModelSel.value; drawPreview(); updateStatus(); });
+const shadowSourceSel=document.getElementById('shadowSource');
+if(shadowSourceSel) shadowSourceSel.addEventListener('change',()=>{
+  S.shadowSource=shadowSourceSel.value;
+  const tolShown = S.shadowSource!=='all';
+  const t=document.getElementById('shadowTol'), l=document.getElementById('shadowTolLbl');
+  if(t) t.style.display=tolShown?'':'none';
+  if(l) l.style.display=tolShown?'':'none';
+});
+const shadowTolInp=document.getElementById('shadowTol');
+if(shadowTolInp) shadowTolInp.addEventListener('input',()=>{ S.shadowTol=+shadowTolInp.value; });
 const colorInp=document.getElementById('color');
 colorInp.addEventListener('input',()=>{ S.erase=false; S.color=colorInp.value; clearMetal(); markSwatch(); updateColorFab(); });
 colorInp.addEventListener('change',()=>{ addToPalette(colorInp.value); });   // finaler Pick -> in die persistente Palette
@@ -1525,9 +1702,10 @@ document.addEventListener('fullscreenchange',()=>{
 });
 
 addEventListener('keydown',e=>{
+  if(e.key==='Enter' && S.shadowSess){ e.preventDefault(); commitShadow(); return; }
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); }
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){ e.preventDefault(); redo(); }
-  if(e.key==='Escape'){ if(S.drawMask) cancelDrawMask();
+  if(e.key==='Escape'){ if(S.shadowSess) cancelShadow(); if(S.drawMask) cancelDrawMask();
     if(S.boxDraw){ S.boxDraw=false; S.boxStart=null; const bb=document.getElementById('boxBtn'); bb.classList.remove('active'); bb.title='Rechteck/Ellipse aufziehen'; }
     S.pts=[]; drawPreview(); }
 });
@@ -1546,6 +1724,7 @@ function updateStatus(){
     smudge:'Ziehen zum Verwischen nasser Farbe',
     fill:'In eine freie Fläche tippen – Farbe läuft bis zu den Linien voll · Toleranz regelt Auslauf-Sicherheit',
     outline:'Auf eine Farbfläche tippen – zieht eine Kontur in der Wählfarbe · Modus wählt Angetippte Fläche / Alle dieser Farbe / Ganzes Bild · Dicke regelt die Breite',
+    shadow:'Fläche antippen → Griffe ziehen (Fluchtpunkt/Tiefe bzw. Richtung) → außerhalb tippen oder Enter zum Übernehmen, Esc bricht ab',
   };
   if(S.drawMask){
     document.getElementById('status').innerHTML =
@@ -1569,8 +1748,8 @@ function updateStatus(){
 //------------------------------------------------------------------
 // Mobil-Bedienung: Werkzeug-Rad (halten & ziehen), Farb-Ring, ☰-Menü
 //------------------------------------------------------------------
-const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',fog:'🌫️',dagger:'🗡️',smudge:'👆',fill:'🪣',outline:'⭕'};
-const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',fog:'Nebeln',dagger:'Dagger',smudge:'Verwischen',fill:'Füllen',outline:'Outline'};
+const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',fog:'🌫️',dagger:'🗡️',smudge:'👆',fill:'🪣',outline:'⭕',shadow:'📦'};
+const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',fog:'Nebeln',dagger:'Dagger',smudge:'Verwischen',fill:'Füllen',outline:'Outline',shadow:'3D-Schatten'};
 function updateToolFab(){ const f=document.getElementById('toolFab'); if(f) f.textContent=TOOL_EMOJI[S.tool]||'🎨'; }
 function updateColorFab(){ const f=document.getElementById('colorFab'); if(!f) return;
   f.style.background = S.erase
@@ -2005,8 +2184,8 @@ document.getElementById('battleBtn').addEventListener('click', ()=>renderBattle(
 // „Was ist neu"-Popup – einmal pro Gerät (Version hochzählen für neue Feature-Runden)
 (function(){
   const wn=document.getElementById('whatsNew'); if(!wn) return;
-  if(!localStorage.getItem('hs_whatsnew_v4')) wn.style.display='block';
-  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v4','1'); wn.style.display='none'; });
+  if(!localStorage.getItem('hs_whatsnew_v5')) wn.style.display='block';
+  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v5','1'); wn.style.display='none'; });
   const openBtn=document.getElementById('whatsNewOpen');
   if(openBtn) openBtn.addEventListener('click', ()=>{ wn.style.display='block'; });   // jederzeit wieder anzeigen
 })();
