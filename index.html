@@ -148,6 +148,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15c4 2.5 8-3.5 12-1.5M6 10.5c3 1.5 6-2.5 9-.5"/></svg></button>
       <button class="tool iconbtn" data-tool="fill" title="Füllen (Farbe in eine Fläche tippen)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 10.5a6 6 0 0 1-12 0C6 9.5 12 3 12 3z"/></svg></button>
+      <button class="tool iconbtn" data-tool="outline" title="Outline (Kontur um eine Farbfläche)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" stroke-dasharray="3 3"/></svg></button>
     </div>
 
     <div class="grp">
@@ -170,6 +172,17 @@
     <div class="grp" id="fillGrp" style="display:none">
       <label>Füllen</label>
       <label class="dl">Toleranz</label><input type="range" id="fillTol" min="0" max="100" value="50" title="Niedrig = eng & auslauf-sicher · Hoch = füllt durch dünnen Nebel">
+    </div>
+
+    <div class="grp" id="outlineGrp" style="display:none">
+      <label>Outline</label>
+      <select id="outlineMode" title="Was soll umrandet werden?">
+        <option value="region">Angetippte Fläche</option>
+        <option value="color">Alle dieser Farbe</option>
+        <option value="all">Ganzes Bild (Silhouette)</option>
+      </select>
+      <label class="dl">Dicke</label><input type="range" id="outlineWidth" min="1" max="20" value="6" title="Breite der Kontur-Linie">
+      <label class="dl" id="outlineTolLbl">Toleranz</label><input type="range" id="outlineTol" min="0" max="100" value="50" title="Farbabstand der Flächenerkennung (nur Angetippte Fläche / Alle dieser Farbe)">
     </div>
 
     <div class="grp">
@@ -302,6 +315,7 @@
 <div id="whatsNew" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;width:min(300px,calc(100vw - 24px));box-sizing:border-box;background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:16px;font-size:14px;line-height:1.5;">
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
   <ul style="margin:0 0 12px;padding-left:18px;">
+    <li>⭕ <b>Outline</b> — Farbfläche antippen, präzise Kontur außen herum · 3 Modi: angetippte Fläche · alle einer Farbe · ganzes Bild (Silhouette)</li>
     <li>🕳️ <b>Käfig mit Aussparungen</b> — Bereiche hinzufügen/abziehen, Rechteck/Ellipse aufziehen, Löcher (Fenster, Waschbecken …) bleiben geschützt</li>
     <li>🧱 <b>Neue Wände</b> — Toiletten, Planetarium, Backsteinmauer & Schacht (jetzt 17 Motive)</li>
     <li>🎨 <b>Farbe deckt jetzt voll</b> — solide Deckung als Standard (kein Wand-Durchschein/Sprenkel); für den Realismus-Look „Deckend" abwählen</li>
@@ -427,6 +441,9 @@ const S = {
   boxDraw:false,      // Rechteck/Ellipse-Aufziehen aktiv
   boxStart:null,      // erste Ecke beim Aufziehen {x,y}
   fillTol:50,         // Füllen: Toleranz (0 = eng/auslauf-sicher .. 100 = aggressiv durch Nebel)
+  outlineMode:'region',   // Outline: 'region' | 'color' | 'all'
+  outlineWidth:6,         // Outline: Linienbreite in px (1..20)
+  outlineTol:50,          // Outline: Farbtoleranz der Flächenerkennung (region/color)
 };
 
 const drips = [];   // aktive Tropfen
@@ -708,6 +725,44 @@ function floodRegion(data, w, h, sx, sy, tol, allow){
   return mask;
 }
 
+//<<OUTLINE-CORE>>
+// Reine Masken-/Kanten-Geometrie fürs Outline-Tool (kein Canvas/kein State → testbar)
+// Maske: alle Pixel, deren Farbe zur Startfarbe (sx,sy) innerhalb tol passt.
+function colorMask(data, w, h, sx, sy, tol, allow){
+  const si=(sy*w+sx)*4, sr=data[si], sg=data[si+1], sb=data[si+2], sa=data[si+3];
+  const m=new Uint8Array(w*h);
+  for(let i=0;i<w*h;i++){
+    if(allow){ const x=i%w, y=(i/w)|0; if(!allow(x,y)) continue; }
+    const j=i*4;
+    if((Math.abs(data[j]-sr)+Math.abs(data[j+1]-sg)+Math.abs(data[j+2]-sb)+Math.abs(data[j+3]-sa))<=tol) m[i]=1;
+  }
+  return m;
+}
+// Maske: alle bemalten Pixel (alpha>0) → Modus „ganzes Bild" liefert nur die Außen-Silhouette.
+function paintedMask(data, w, h, allow){
+  const m=new Uint8Array(w*h);
+  for(let i=0;i<w*h;i++){
+    if(allow){ const x=i%w, y=(i/w)|0; if(!allow(x,y)) continue; }
+    if(data[i*4+3]>0) m[i]=1;
+  }
+  return m;
+}
+// 1-px-Randband: Maskenpixel mit mind. einem 4-Nachbarn AUSSERHALB der Maske
+// (Bildrand zählt als außen). Innen-Nähte zwischen Maskenflächen sind KEIN Rand.
+function edgeBand(mask, w, h){
+  const band=new Uint8Array(w*h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const i=y*w+x; if(!mask[i]) continue;
+    const up = y>0   ? mask[i-w] : 0;
+    const dn = y<h-1 ? mask[i+w] : 0;
+    const lf = x>0   ? mask[i-1] : 0;
+    const rt = x<w-1 ? mask[i+1] : 0;
+    if(!up || !dn || !lf || !rt) band[i]=1;
+  }
+  return band;
+}
+//<</OUTLINE-CORE>>
+
 function doFill(p){
   const sx0=Math.round(p.x), sy0=Math.round(p.y);
   if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
@@ -734,6 +789,44 @@ function doFill(p){
     // 2) neue Farbe HINTER die verbleibende Farbe (Linien bleiben oben) + weiche Kante
     px.save(); px.globalCompositeOperation='destination-over'; px.filter='blur(0.7px)'; px.drawImage(fc,0,0); px.filter='none'; px.restore();
   }
+  drawPreview(); updateStatus();
+}
+
+function doOutline(p){
+  const sx0=Math.round(p.x), sy0=Math.round(p.y);
+  if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
+  const cage=cageData();
+  if(cage && cage[(sy0*W+sx0)*4+3]===0){
+    document.getElementById('status').innerHTML='<b>Outline</b> · außerhalb des Käfigs – tippe innen';
+    return;
+  }
+  const allow = cage ? (x,y)=>cage[(y*W+x)*4+3]>0 : null;
+  const a=px.getImageData(0,0,W,H).data;
+  let mask;
+  if(S.outlineMode==='all'){
+    mask=paintedMask(a,W,H,allow);
+  } else {
+    if(a[(sy0*W+sx0)*4+3]===0){
+      document.getElementById('status').innerHTML='<b>Outline</b> · tippe auf eine Farbfläche';
+      return;
+    }
+    const tol=20+(S.outlineTol/100)*400;
+    mask = (S.outlineMode==='color')
+      ? colorMask(a,W,H,sx0,sy0,tol,allow)
+      : floodRegion(a,W,H,sx0,sy0,tol,allow);   // 'region'
+  }
+  const band=edgeBand(mask,W,H);
+  const pts=[];
+  for(let i=0;i<W*H;i++){ if(band[i]) pts.push(i); }
+  if(!pts.length){
+    document.getElementById('status').innerHTML='<b>Outline</b> · nichts zum Umranden gefunden';
+    return;
+  }
+  pushUndo();
+  resetBuf();
+  const r=Math.max(0.6, S.outlineWidth/2);
+  for(const i of pts){ const x=i%W, y=(i/W)|0; coreDab(x,y,r); speckle(x,y,r); }
+  commitFullStroke();          // zieht cageMask(strokeCv) mit fullAlpha auf px + leert Puffer
   drawPreview(); updateStatus();
 }
 
@@ -1020,6 +1113,8 @@ preview.addEventListener('pointerdown', e=>{
 
   if(S.tool==='fill'){
     doFill(p);
+  } else if(S.tool==='outline'){
+    doOutline(p);
   } else if(S.tool==='spray'){
     pushUndo(); S.drawing=true; S.lastSpray={x:p.x,y:p.y};
     resetBuf(); bufDab(p.x,p.y); renderFullPreview();
@@ -1262,6 +1357,7 @@ function selectTool(name){
   document.querySelectorAll('button.tool').forEach(x=>x.classList.toggle('active', x.dataset.tool===name));
   const dg=document.getElementById('dagGrp'); if(dg) dg.style.display=(name==='dagger'?'':'none');
   const fg=document.getElementById('fillGrp'); if(fg) fg.style.display=(name==='fill'?'':'none');
+  const og=document.getElementById('outlineGrp'); if(og) og.style.display=(name==='outline'?'':'none');
   updateToolFab(); drawPreview(); updateStatus();
 }
 document.querySelectorAll('button.tool').forEach(b=>{ b.addEventListener('click',()=>selectTool(b.dataset.tool)); });
@@ -1270,6 +1366,19 @@ const pr=document.getElementById('pressure'), prv=document.getElementById('press
 pr.addEventListener('input',()=>{ setPressure(pr.value); });
 const fillTolInp=document.getElementById('fillTol');
 if(fillTolInp) fillTolInp.addEventListener('input',()=>{ S.fillTol=+fillTolInp.value; });
+const outlineModeSel=document.getElementById('outlineMode');
+if(outlineModeSel) outlineModeSel.addEventListener('change',()=>{
+  S.outlineMode=outlineModeSel.value;
+  const tolShown = S.outlineMode!=='all';
+  const t=document.getElementById('outlineTol'), l=document.getElementById('outlineTolLbl');
+  if(t) t.style.display=tolShown?'':'none';
+  if(l) l.style.display=tolShown?'':'none';
+  updateStatus();
+});
+const outlineWidthInp=document.getElementById('outlineWidth');
+if(outlineWidthInp) outlineWidthInp.addEventListener('input',()=>{ S.outlineWidth=+outlineWidthInp.value; });
+const outlineTolInp=document.getElementById('outlineTol');
+if(outlineTolInp) outlineTolInp.addEventListener('input',()=>{ S.outlineTol=+outlineTolInp.value; });
 const colorInp=document.getElementById('color');
 colorInp.addEventListener('input',()=>{ S.erase=false; S.color=colorInp.value; clearMetal(); markSwatch(); updateColorFab(); });
 colorInp.addEventListener('change',()=>{ addToPalette(colorInp.value); });   // finaler Pick -> in die persistente Palette
@@ -1436,6 +1545,7 @@ function updateStatus(){
     })[S.dagMode],
     smudge:'Ziehen zum Verwischen nasser Farbe',
     fill:'In eine freie Fläche tippen – Farbe läuft bis zu den Linien voll · Toleranz regelt Auslauf-Sicherheit',
+    outline:'Auf eine Farbfläche tippen – zieht eine Kontur in der Wählfarbe · Modus wählt Angetippte Fläche / Alle dieser Farbe / Ganzes Bild · Dicke regelt die Breite',
   };
   if(S.drawMask){
     document.getElementById('status').innerHTML =
@@ -1459,8 +1569,8 @@ function updateStatus(){
 //------------------------------------------------------------------
 // Mobil-Bedienung: Werkzeug-Rad (halten & ziehen), Farb-Ring, ☰-Menü
 //------------------------------------------------------------------
-const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',fog:'🌫️',dagger:'🗡️',smudge:'👆',fill:'🪣'};
-const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',fog:'Nebeln',dagger:'Dagger',smudge:'Verwischen',fill:'Füllen'};
+const TOOL_EMOJI={spray:'🎨',line:'📏',curve:'〰️',fog:'🌫️',dagger:'🗡️',smudge:'👆',fill:'🪣',outline:'⭕'};
+const TOOL_LABEL={spray:'Sprühen',line:'Linie',curve:'Kurve',fog:'Nebeln',dagger:'Dagger',smudge:'Verwischen',fill:'Füllen',outline:'Outline'};
 function updateToolFab(){ const f=document.getElementById('toolFab'); if(f) f.textContent=TOOL_EMOJI[S.tool]||'🎨'; }
 function updateColorFab(){ const f=document.getElementById('colorFab'); if(!f) return;
   f.style.background = S.erase
@@ -1895,8 +2005,8 @@ document.getElementById('battleBtn').addEventListener('click', ()=>renderBattle(
 // „Was ist neu"-Popup – einmal pro Gerät (Version hochzählen für neue Feature-Runden)
 (function(){
   const wn=document.getElementById('whatsNew'); if(!wn) return;
-  if(!localStorage.getItem('hs_whatsnew_v3')) wn.style.display='block';
-  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v3','1'); wn.style.display='none'; });
+  if(!localStorage.getItem('hs_whatsnew_v4')) wn.style.display='block';
+  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v4','1'); wn.style.display='none'; });
   const openBtn=document.getElementById('whatsNewOpen');
   if(openBtn) openBtn.addEventListener('click', ()=>{ wn.style.display='block'; });   // jederzeit wieder anzeigen
 })();
