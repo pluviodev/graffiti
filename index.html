@@ -914,6 +914,8 @@ function buildShadowBlock(sess, stepPx){
   return pm;
 }
 function shadowStatus(msg){ const el=document.getElementById('status'); if(el) el.innerHTML='<b>3D-Schatten</b> · '+msg; }
+// Griffe im sichtbaren Bild halten (Rand-Margin, damit der Punkt greifbar bleibt)
+function clampPt(p){ const m=10; return {x:Math.max(m,Math.min(W-m,p.x)), y:Math.max(m,Math.min(H-m,p.y))}; }
 function doShadowStart(p){
   const sx0=Math.round(p.x), sy0=Math.round(p.y);
   if(sx0<0||sy0<0||sx0>=W||sy0>=H) return;
@@ -931,12 +933,13 @@ function doShadowStart(p){
   const bb=maskBBox(mask);
   if(!bb){ shadowStatus('nichts zum Schattieren gefunden'); return; }
   const anchor={x:(bb.x0+bb.x1)/2, y:(bb.y0+bb.y1)/2};
-  const diag=Math.hypot(bb.x1-bb.x0, bb.y1-bb.y0)||40, off=Math.max(30, diag*0.5);
+  const diag=Math.hypot(bb.x1-bb.x0, bb.y1-bb.y0)||40;
+  const off=Math.max(30, Math.min(diag*0.5, Math.min(W,H)*0.22));   // gedeckelt, damit Default-Griffe im Bild bleiben
   fillMaskCanvas(shadowMaskCv, mask, S.color);
   S.shadowSess={ mask, bb, anchor,
-    grip:{x:anchor.x+off, y:anchor.y+off},
-    vp:{x:anchor.x+off*2.2, y:anchor.y+off*2.2},
-    depthGrip:{x:anchor.x+off, y:anchor.y+off} };
+    grip:clampPt({x:anchor.x+off, y:anchor.y+off}),
+    vp:clampPt({x:anchor.x+off*2.2, y:anchor.y+off*2.2}),
+    depthGrip:clampPt({x:anchor.x+off, y:anchor.y+off}) };
   shadowStatus('Griffe ziehen · außerhalb tippen oder Enter = übernehmen · Esc = abbrechen');
   drawPreview();
 }
@@ -955,9 +958,10 @@ function doShadowDown(p){
 }
 function doShadowMove(p){
   const sess=S.shadowSess; if(!sess||!S.shadowDrag) return;
-  if(S.shadowDrag==='grip') sess.grip={x:p.x,y:p.y};
-  else if(S.shadowDrag==='vp') sess.vp={x:p.x,y:p.y};
-  else if(S.shadowDrag==='depth') sess.depthGrip={x:p.x,y:p.y};
+  const q=clampPt(p);
+  if(S.shadowDrag==='grip') sess.grip=q;
+  else if(S.shadowDrag==='vp') sess.vp=q;
+  else if(S.shadowDrag==='depth') sess.depthGrip=q;
   drawPreview();
 }
 function commitShadow(){
