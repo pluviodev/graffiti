@@ -189,10 +189,6 @@
 
     <div class="grp" id="shadowGrp" style="display:none">
       <label>3D-Schatten</label>
-      <select id="shadowModel" title="Fluchtpunkt = Perspektive · Parallel = fester Versatz">
-        <option value="vp">Fluchtpunkt</option>
-        <option value="parallel">Parallel</option>
-      </select>
       <select id="shadowSource" title="Was wirft den Schatten?">
         <option value="all">Ganzes Bild (Silhouette)</option>
         <option value="region">Angetippte Fläche</option>
@@ -331,7 +327,7 @@
 <div id="whatsNew" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;width:min(300px,calc(100vw - 24px));box-sizing:border-box;background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:16px;font-size:14px;line-height:1.5;">
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
   <ul style="margin:0 0 12px;padding-left:18px;">
-    <li>📦 <b>3D-Schatten</b> — Fläche antippen, Block mit Fluchtpunkt oder parallel herausziehen (Griffe), liegt hinter der Farbe</li>
+    <li>📦 <b>3D-Schatten</b> — Fläche antippen, Block in eine Richtung herausziehen (Griff), liegt hinter der Farbe</li>
     <li>⭕ <b>Outline</b> — Farbfläche antippen, präzise Kontur außen herum · 3 Modi: angetippte Fläche · alle einer Farbe · ganzes Bild (Silhouette)</li>
     <li>🕳️ <b>Käfig mit Aussparungen</b> — Bereiche hinzufügen/abziehen, Rechteck/Ellipse aufziehen, Löcher (Fenster, Waschbecken …) bleiben geschützt</li>
     <li>🧱 <b>Neue Wände</b> — Toiletten, Planetarium, Backsteinmauer & Schacht (jetzt 17 Motive)</li>
@@ -461,7 +457,6 @@ const S = {
   outlineMode:'region',   // Outline: 'region' | 'color' | 'all'
   outlineWidth:6,         // Outline: Linienbreite in px (1..20)
   outlineTol:50,          // Outline: Farbtoleranz der Flächenerkennung (region/color)
-  shadowModel:'vp',       // '3D-Schatten': 'vp' (Fluchtpunkt) | 'parallel'
   shadowSource:'all',     // 'region' | 'color' | 'all'
   shadowTol:50,           // Farbtoleranz (region/color)
   shadowSess:null,        // aktive Sitzung {mask,bb,anchor,grip,vp,depthGrip}
@@ -885,19 +880,8 @@ function fillMaskCanvas(cv, mask, color){
 }
 // Parameter + maximale Verschiebung aus den aktuellen Griff-Positionen
 function shadowParams(sess){
-  if(S.shadowModel==='parallel'){
-    const dx=sess.grip.x-sess.anchor.x, dy=sess.grip.y-sess.anchor.y;
-    return {model:'parallel', dx, dy, maxShift:Math.hypot(dx,dy)};
-  }
-  const vp=sess.vp, ax=sess.anchor.x, ay=sess.anchor.y;
-  const ux=vp.x-ax, uy=vp.y-ay, uLen2=(ux*ux+uy*uy)||1;
-  const proj=((sess.depthGrip.x-ax)*ux + (sess.depthGrip.y-ay)*uy)/uLen2;
-  const depth=Math.max(0, Math.min(0.95, proj));
-  let maxD=0;
-  for(const c of [[sess.bb.x0,sess.bb.y0],[sess.bb.x1,sess.bb.y0],[sess.bb.x0,sess.bb.y1],[sess.bb.x1,sess.bb.y1]]){
-    const d=Math.hypot(c[0]-vp.x, c[1]-vp.y); if(d>maxD) maxD=d;
-  }
-  return {model:'vp', vx:vp.x, vy:vp.y, depth, maxShift:depth*maxD};
+  const dx=sess.grip.x-sess.anchor.x, dy=sess.grip.y-sess.anchor.y;
+  return {model:'parallel', dx, dy, maxShift:Math.hypot(dx,dy)};
 }
 // Block per Sweep auf shadowBlockCv bauen (stepPx klein = fein)
 function buildShadowBlock(sess, stepPx){
@@ -906,8 +890,7 @@ function buildShadowBlock(sess, stepPx){
   const bx=shadowBlockCv.getContext('2d'); bx.setTransform(1,0,0,1,0,0); bx.clearRect(0,0,W,H);
   const tfs=sweepTransforms(pm.model, pm, steps);
   for(const tf of tfs){
-    if(tf.k==='t') bx.setTransform(1,0,0,1, tf.tx, tf.ty);
-    else bx.setTransform(tf.r,0,0,tf.r, pm.vx*(1-tf.r), pm.vy*(1-tf.r));
+    bx.setTransform(1,0,0,1, tf.tx, tf.ty);
     bx.drawImage(shadowMaskCv,0,0);
   }
   bx.setTransform(1,0,0,1,0,0);
@@ -936,19 +919,13 @@ function doShadowStart(p){
   const diag=Math.hypot(bb.x1-bb.x0, bb.y1-bb.y0)||40;
   const off=Math.max(30, Math.min(diag*0.5, Math.min(W,H)*0.22));   // gedeckelt, damit Default-Griffe im Bild bleiben
   fillMaskCanvas(shadowMaskCv, mask, S.color);
-  S.shadowSess={ mask, bb, anchor,
-    grip:clampPt({x:anchor.x+off, y:anchor.y+off}),
-    vp:clampPt({x:anchor.x+off*2.2, y:anchor.y+off*2.2}),
-    depthGrip:clampPt({x:anchor.x+off, y:anchor.y+off}) };
-  shadowStatus('Griffe ziehen · außerhalb tippen oder Enter = übernehmen · Esc = abbrechen');
+  S.shadowSess={ mask, bb, anchor, grip:clampPt({x:anchor.x+off, y:anchor.y+off}) };
+  shadowStatus('Richtung ziehen · außerhalb tippen oder Enter = übernehmen · Esc = abbrechen');
   drawPreview();
 }
 function shadowHit(p){
   const sess=S.shadowSess; if(!sess) return null;
-  const near=h=>Math.hypot(p.x-h.x, p.y-h.y)<=14;
-  if(S.shadowModel==='parallel'){ if(near(sess.grip)) return 'grip'; }
-  else { if(near(sess.vp)) return 'vp'; if(near(sess.depthGrip)) return 'depth'; }
-  return null;
+  return Math.hypot(p.x-sess.grip.x, p.y-sess.grip.y)<=14 ? 'grip' : null;
 }
 function doShadowDown(p){
   if(!S.shadowSess){ doShadowStart(p); return; }
@@ -958,10 +935,7 @@ function doShadowDown(p){
 }
 function doShadowMove(p){
   const sess=S.shadowSess; if(!sess||!S.shadowDrag) return;
-  const q=clampPt(p);
-  if(S.shadowDrag==='grip') sess.grip=q;
-  else if(S.shadowDrag==='vp') sess.vp=q;
-  else if(S.shadowDrag==='depth') sess.depthGrip=q;
+  sess.grip=clampPt(p);
   drawPreview();
 }
 function commitShadow(){
@@ -980,14 +954,9 @@ function drawShadowOverlay(){
   pvx.save(); pvx.globalAlpha=0.85; pvx.drawImage(cageMask(shadowBlockCv),0,0); pvx.restore();
   const dot=(x,y,fill)=>{ pvx.fillStyle=fill; pvx.strokeStyle='#000'; pvx.lineWidth=2; pvx.beginPath(); pvx.arc(x,y,8,0,TAU); pvx.fill(); pvx.stroke(); };
   pvx.save(); pvx.setLineDash([6,6]); pvx.strokeStyle='#fff'; pvx.lineWidth=2;
-  if(S.shadowModel==='parallel'){
-    pvx.beginPath(); pvx.moveTo(sess.anchor.x,sess.anchor.y); pvx.lineTo(sess.grip.x,sess.grip.y); pvx.stroke();
-  } else {
-    pvx.beginPath(); pvx.moveTo(sess.anchor.x,sess.anchor.y); pvx.lineTo(sess.vp.x,sess.vp.y); pvx.stroke();
-  }
+  pvx.beginPath(); pvx.moveTo(sess.anchor.x,sess.anchor.y); pvx.lineTo(sess.grip.x,sess.grip.y); pvx.stroke();
   pvx.setLineDash([]);
-  if(S.shadowModel==='parallel'){ dot(sess.grip.x,sess.grip.y,'#00e08a'); }
-  else { dot(sess.vp.x,sess.vp.y,'#ff9f0a'); dot(sess.depthGrip.x,sess.depthGrip.y,'#00e08a'); }
+  dot(sess.grip.x,sess.grip.y,'#00e08a');
   dot(sess.anchor.x,sess.anchor.y,'#fff');
   pvx.restore();
 }
@@ -1548,8 +1517,6 @@ const outlineWidthInp=document.getElementById('outlineWidth');
 if(outlineWidthInp) outlineWidthInp.addEventListener('input',()=>{ S.outlineWidth=+outlineWidthInp.value; });
 const outlineTolInp=document.getElementById('outlineTol');
 if(outlineTolInp) outlineTolInp.addEventListener('input',()=>{ S.outlineTol=+outlineTolInp.value; });
-const shadowModelSel=document.getElementById('shadowModel');
-if(shadowModelSel) shadowModelSel.addEventListener('change',()=>{ S.shadowModel=shadowModelSel.value; drawPreview(); updateStatus(); });
 const shadowSourceSel=document.getElementById('shadowSource');
 if(shadowSourceSel) shadowSourceSel.addEventListener('change',()=>{
   S.shadowSource=shadowSourceSel.value;
@@ -1728,7 +1695,7 @@ function updateStatus(){
     smudge:'Ziehen zum Verwischen nasser Farbe',
     fill:'In eine freie Fläche tippen – Farbe läuft bis zu den Linien voll · Toleranz regelt Auslauf-Sicherheit',
     outline:'Auf eine Farbfläche tippen – zieht eine Kontur in der Wählfarbe · Modus wählt Angetippte Fläche / Alle dieser Farbe / Ganzes Bild · Dicke regelt die Breite',
-    shadow:'Fläche antippen → Griffe ziehen (Fluchtpunkt/Tiefe bzw. Richtung) → außerhalb tippen oder Enter zum Übernehmen, Esc bricht ab',
+    shadow:'Fläche antippen → Richtung/Länge ziehen → außerhalb tippen oder Enter zum Übernehmen, Esc bricht ab',
   };
   if(S.drawMask){
     document.getElementById('status').innerHTML =
