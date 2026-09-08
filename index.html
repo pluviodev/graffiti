@@ -25,6 +25,9 @@
   .grp{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--panel2);
     border:1px solid var(--line);border-radius:10px}
   .grp>label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .collabel{cursor:pointer;user-select:none;white-space:nowrap}
+  .collabel:hover{color:var(--txt)}
+  .collrow{display:flex;align-items:center;gap:6px}
   button.tool,select,button.act{background:#2f3540;color:var(--txt);border:1px solid var(--line);
     border-radius:8px;padding:7px 10px;font-size:13px;cursor:pointer}
   button.tool.active,button.act.active{background:var(--accent);color:#04120c;border-color:var(--accent);font-weight:600}
@@ -236,7 +239,8 @@
     </div>
 
     <div class="grp">
-      <label>Bereich</label>
+      <label id="bereichToggle" class="collabel" title="Käfig-Werkzeuge ein-/ausklappen">Bereich ▸</label>
+      <span id="bereichBtns" class="collrow">
       <button class="act iconbtn" id="maskBtn" title="Käfig-Rand anzeigen: aus (Klick = an)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="1" stroke-dasharray="3 3"/></svg></button>
       <button class="act iconbtn" id="opBtn" title="Modus: Bereich hinzufügen (Klick = Aussparung)">
@@ -253,6 +257,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 12h8l1-12"/></svg></button>
       <button class="act iconbtn" id="exportMaskBtn" title="Bereiche exportieren (JSON)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4H7a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"/><path d="M14 4v4h4"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/></svg></button>
+      </span>
     </div>
 
     <div class="grp">
@@ -1674,6 +1679,11 @@ function syncRoundBtn(){ const b=document.getElementById('roundBtn');
 document.getElementById('undoMaskBtn').addEventListener('click', undoLastShape);
 document.getElementById('clearMaskBtn').addEventListener('click', clearCage);
 document.getElementById('exportMaskBtn').addEventListener('click', exportMasks);
+// „Bereich"-Gruppe ein-/ausklappbar (verhindert Fehlklicks auf Undo/Leeren); Zustand pro Gerät, Standard = zu
+(function(){ const key='hs_bereich_open', tog=document.getElementById('bereichToggle'), box=document.getElementById('bereichBtns');
+  const set=(open)=>{ box.style.display=open?'flex':'none'; tog.textContent='Bereich '+(open?'▾':'▸'); };
+  let open = localStorage.getItem(key)==='1'; set(open);
+  tog.addEventListener('click', ()=>{ open=!open; localStorage.setItem(key, open?'1':'0'); set(open); }); })();
 // Vollbild (Fullscreen-API; auf iPhone-Safari nicht verfügbar -> dort „Zum Startbildschirm")
 document.getElementById('fsBtn').addEventListener('click',()=>{
   const d=document, el=d.documentElement;
