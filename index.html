@@ -687,9 +687,9 @@ function fogR(){ return CAPS[S.cap].radius*(1.6+S.pressure*1.4); }   // weiter w
 function fogSpeckle(x,y){
   const cap=CAPS[S.cap], p=S.pressure, R=fogR();
   noteY(y-R); noteY(y+R);
-  // Schwache, durchgehende Grund-Tönung füllt die Lücken zwischen den Körnern (killt das Pixel-Korn),
-  // bleibt aber dünn genug fürs „langsam aufbauen".
-  const base=clamp(0.006+0.011*p, 0, 0.022);
+  // Durchgehende Grund-Tönung füllt die Lücken zwischen den Körnern (killt das Pixel-Korn) UND
+  // deckt die helle Wand ab, damit die Farbe echt liest statt milchig durchzuscheinen.
+  const base=clamp(0.014+0.024*p, 0, 0.05);
   const bg=sx.createRadialGradient(x,y,0, x,y,R);
   bg.addColorStop(0, rgba(S.color, base));
   bg.addColorStop(0.6, rgba(S.color, base*0.5));
@@ -704,7 +704,7 @@ function fogSpeckle(x,y){
     const rad=R*g, fall=1-g;                             // fall: 1 in der Mitte .. 0 am weichen Rand
     const cx=x+Math.cos(ang)*rad, cy=y+Math.sin(ang)*rad;
     const dr=1.3+Math.random()*(1.8+cap.radius*0.03);    // größer als früher -> weiche statt harte Kante
-    const a=clamp((0.05+0.11*p)*fall, 0, 0.18);          // etwas kräftiger je Korn, weil die weiche Kante Alpha „verteilt"
+    const a=clamp((0.10+0.22*p)*fall, 0, 0.36);          // farbecht: doppelt so kräftig je Korn (weiche Kante verteilt Alpha, daher ist mehr nötig)
     const dg=sx.createRadialGradient(cx,cy,0, cx,cy,dr);
     dg.addColorStop(0,   rgba(S.color, a));
     dg.addColorStop(0.6, rgba(S.color, a*0.5));
