@@ -746,6 +746,27 @@ function floodRegion(data, w, h, sx, sy, tol, allow){
 
 //<<OUTLINE-CORE>>
 // Reine Masken-/Kanten-Geometrie fürs Outline-Tool (kein Canvas/kein State → testbar)
+// Zusammenhängende BEMALTE Form ab (sx,sy). Anders als floodRegion vergleicht sie je
+// Schritt nur die LOKALE Differenz zum Nachbarpixel (nicht zur Startfarbe) → läuft über
+// weiche Farbverläufe (Metallic Chrom/Gold/Bronze!) hinweg und erfasst die ganze Fläche
+// als EINE Form. Unbemalte Pixel (alpha<=FLOOR) sind immer Grenze. tol trennt harte Kanten.
+function floodShape(data, w, h, sx, sy, tol, allow){
+  const mask=new Uint8Array(w*h), FLOOR=16;
+  const painted=(i)=>data[i*4+3]>FLOOR;
+  const start=sy*w+sx; if(!painted(start)) return mask;
+  const near=(i,k)=>{ const a=i*4,b=k*4;
+    return (Math.abs(data[a]-data[b])+Math.abs(data[a+1]-data[b+1])+Math.abs(data[a+2]-data[b+2])+Math.abs(data[a+3]-data[b+3]))<=tol; };
+  const stack=[start]; mask[start]=1;
+  while(stack.length){
+    const i=stack.pop(), x=i%w, y=(i/w)|0;
+    const tryN=(k,nx,ny)=>{ if(mask[k]) return; if(allow&&!allow(nx,ny)) return; if(!painted(k)||!near(i,k)) return; mask[k]=1; stack.push(k); };
+    if(x>0)   tryN(i-1,x-1,y);
+    if(x<w-1) tryN(i+1,x+1,y);
+    if(y>0)   tryN(i-w,x,y-1);
+    if(y<h-1) tryN(i+w,x,y+1);
+  }
+  return mask;
+}
 // Maske: alle Pixel, deren Farbe zur Startfarbe (sx,sy) innerhalb tol passt.
 function colorMask(data, w, h, sx, sy, tol, allow){
   const si=(sy*w+sx)*4, sr=data[si], sg=data[si+1], sb=data[si+2], sa=data[si+3];
@@ -849,7 +870,7 @@ function doOutline(p){
     const tol=20+(S.outlineTol/100)*400;
     mask = (S.outlineMode==='color')
       ? colorMask(a,W,H,sx0,sy0,tol,allow)
-      : floodRegion(a,W,H,sx0,sy0,tol,allow);   // 'region'
+      : floodShape(a,W,H,sx0,sy0,tol,allow);   // 'region' – Metallic-fest (Verlauf = eine Form)
   }
   const band=edgeBand(mask,W,H);
   const pts=[];
@@ -911,7 +932,7 @@ function doShadowStart(p){
   else {
     if(a[(sy0*W+sx0)*4+3]===0){ shadowStatus('tippe auf eine Farbfläche'); return; }
     const tol=20+(S.shadowTol/100)*400;
-    mask = (S.shadowSource==='color') ? colorMask(a,W,H,sx0,sy0,tol,allow) : floodRegion(a,W,H,sx0,sy0,tol,allow);
+    mask = (S.shadowSource==='color') ? colorMask(a,W,H,sx0,sy0,tol,allow) : floodShape(a,W,H,sx0,sy0,tol,allow); // 'region' – Metallic-fest
   }
   const bb=maskBBox(mask);
   if(!bb){ shadowStatus('nichts zum Schattieren gefunden'); return; }
