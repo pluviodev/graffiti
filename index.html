@@ -69,6 +69,7 @@
     background:rgba(44,49,59,.96);border:2px solid rgba(255,255,255,.10);color:#fff;
     transform:translate(var(--x,0),var(--y,0));
     transition:transform .08s ease-out,background .08s,border-color .08s,box-shadow .08s;will-change:transform}
+  #radialMenu .rm-seg svg{width:24px;height:24px;display:block}
   #radialMenu .rm-seg.active{border-color:rgba(0,224,138,.55)}
   #radialMenu .rm-seg.hot{transform:translate(var(--x),var(--y)) scale(1.28);
     background:var(--accent,#00e08a);border-color:#fff;color:#06231a;box-shadow:0 6px 18px rgba(0,0,0,.5)}
@@ -233,8 +234,14 @@
       <input type="color" id="color" value="#ff2d55">
       <div class="swatches" id="swatches"></div>
       <div class="sw eraser" id="eraserSw" title="Radierer – wischt weg. Wirkt mit JEDEM Werkzeug: Linie, Kurve, Bogen, Nebeln … (Dicke/Cap regeln Stärke & Breite)"></div>
-      <div class="sw tone-shadow" id="toneShadowSw" title="Schatten – wie eine halbtransparente schwarze Dose: dunkelt den Farbton darunter ab. Je mehr Züge, desto dunkler. Wirkt mit JEDEM Werkzeug (Dicke/Cap regeln Breite & Stärke)"></div>
-      <div class="sw tone-light" id="toneLightSw" title="Licht – wie eine halbtransparente weiße Dose: hellt den Farbton darunter auf. Je mehr Züge, desto heller. Wirkt mit JEDEM Werkzeug (Dicke/Cap regeln Breite & Stärke)"></div>
+      <div class="sw tone-shadow" id="toneShadowSw" title="Schatten – wie eine halbtransparente schwarze Dose: dunkelt den Farbton darunter ab. Je mehr Züge, desto dunkler. Dicke = Breite, Intensität-Regler = Stärke pro Zug"></div>
+      <div class="sw tone-light" id="toneLightSw" title="Licht – wie eine halbtransparente weiße Dose: hellt den Farbton darunter auf. Je mehr Züge, desto heller. Dicke = Breite, Intensität-Regler = Stärke pro Zug"></div>
+    </div>
+
+    <div class="grp" id="toneGrp" style="display:none">
+      <label>Intensität</label>
+      <input type="range" id="toneStrength" min="3" max="60" value="15" title="Wie stark Schatten/Licht pro Zug wirkt – niedrig = sanft aufbauen, hoch = kräftig">
+      <span class="val" id="toneStrengthVal">15%</span>
     </div>
 
     <div class="grp" id="metalGrp">
@@ -467,6 +474,7 @@ const S = {
   solid:true,            // true = voll deckend (100%, Standard), false = Realismus (Wand scheint durch, 86%)
   erase:false,           // true = Radier-Modus (wischt weg statt zu malen) – wirkt mit JEDEM Werkzeug
   tone:null,             // null | 'shadow' | 'light' – tönende Dose: dunkelt (schwarz) bzw. hellt (weiß) den Untergrund auf, baut sich über mehrere Züge auf
+  toneStrength:0.15,     // Deckkraft pro Zug für Schatten/Licht (eigener Intensitäts-Regler, unabhängig von der Dicke)
   // Dagger (schräge Dose): Modus + Cone-Parameter
   dagMode:'free',        // 'free' = Freihand (feste Rad-Richtung), 'curve' = gebogene Bahn
   coneLen:120,           // Reichweite des Nebels (px)
@@ -700,7 +708,7 @@ function eraseReveal(){
 }
 // Ton-Dose (Schatten/Licht): Strichform behalten, aber auf Schwarz bzw. Weiß umfärben.
 // Beim Auftragen mit reduzierter Deckkraft -> dunkelt/hellt den Untergrund auf, baut sich über Züge auf.
-function toneAlpha(){ return clamp(0.10+S.pressure*0.38, 0.06, 0.48); }  // Druck steuert die Stärke pro Zug (Default 55% ≈ 0.31)
+function toneAlpha(){ return clamp(S.toneStrength, 0.02, 0.6); }  // eigener Intensitäts-Regler (entkoppelt von der Dicke)
 function toneStroke(){
   tsx.clearRect(0,0,W,H); tsx.drawImage(strokeCv,0,0);
   tsx.save(); tsx.globalCompositeOperation='source-in';
@@ -1628,13 +1636,16 @@ function addToPalette(c){ palette=mruInsert(palette, c, PALETTE_MAX); savePalett
 function markSwatch(){ document.querySelectorAll('.sw').forEach(s=>s.classList.toggle('sel', !S.metal && !S.erase && !S.tone && !!s.dataset.c && s.dataset.c.toLowerCase()===S.color.toLowerCase()));
   const es=document.getElementById('eraserSw'); if(es) es.classList.toggle('sel', S.erase);
   const ts=document.getElementById('toneShadowSw'); if(ts) ts.classList.toggle('sel', S.tone==='shadow');
-  const tl=document.getElementById('toneLightSw'); if(tl) tl.classList.toggle('sel', S.tone==='light'); }
+  const tl=document.getElementById('toneLightSw'); if(tl) tl.classList.toggle('sel', S.tone==='light');
+  const tg=document.getElementById('toneGrp'); if(tg) tg.style.display = S.tone ? '' : 'none'; }
 // Radier-Modus umschalten (Radieren ist "eine Farbe", kein eigenes Werkzeug)
 function setErase(on){ S.erase=!!on; if(S.erase){ S.tone=null; clearMetal(); } markSwatch(); markMetal(); updateColorFab(); updateStatus(); }
 const eraserSw=document.getElementById('eraserSw');
 if(eraserSw) eraserSw.addEventListener('click',()=>setErase(true));
 // Ton-Dose umschalten (Schatten/Licht sind "eine Farbe", kein eigenes Werkzeug)
 function setTone(t){ S.tone=t; if(t){ S.erase=false; clearMetal(); } markSwatch(); markMetal(); updateColorFab(); updateStatus(); }
+(function(){ const ts=document.getElementById('toneStrength'), tv=document.getElementById('toneStrengthVal');
+  if(ts) ts.addEventListener('input',()=>{ S.toneStrength=ts.value/100; if(tv) tv.textContent=ts.value+'%'; if(S.tone) drawPreview(); }); })();
 const toneShadowSw=document.getElementById('toneShadowSw');
 if(toneShadowSw) toneShadowSw.addEventListener('click',()=>setTone('shadow'));
 const toneLightSw=document.getElementById('toneLightSw');
@@ -1773,7 +1784,11 @@ const RadialMenu=(function(){
   const R=96, DEAD=30;                 // Ring-Radius / Totzone in der Mitte (Abbruch)
   let open=false, items=[], cx=0, cy=0, hot=-1, segEls=[];
   function toolItems(){
-    const arr=Object.keys(TOOL_EMOJI).map(t=>({emoji:TOOL_EMOJI[t], label:TOOL_LABEL[t], act:()=>selectTool(t), active:()=>S.tool===t}));
+    // Icons 1:1 aus der Toolbar klonen -> exakt dieselben Symbole wie oben
+    const arr=Object.keys(TOOL_LABEL).map(t=>{
+      const btn=document.querySelector('button.tool[data-tool="'+t+'"]');
+      return {svg: btn?btn.innerHTML:'', emoji:TOOL_EMOJI[t], label:TOOL_LABEL[t], act:()=>selectTool(t), active:()=>S.tool===t};
+    });
     arr.push({emoji:'↶', label:'Zurück', act:()=>undo()});
     arr.push({emoji:'↷', label:'Vor',    act:()=>redo()});
     return arr;
@@ -1785,7 +1800,7 @@ const RadialMenu=(function(){
       const th=-Math.PI/2 + i*step;                       // Start oben, im Uhrzeigersinn
       const el=document.createElement('div');
       el.className='rm-seg'+(it.active&&it.active()?' active':'');
-      el.textContent=it.emoji;
+      if(it.svg) el.innerHTML=it.svg; else el.textContent=it.emoji;
       el.style.setProperty('--x',(Math.cos(th)*R).toFixed(1)+'px');
       el.style.setProperty('--y',(Math.sin(th)*R).toFixed(1)+'px');
       host.appendChild(el); segEls.push(el);
