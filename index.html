@@ -70,6 +70,19 @@
     transform:translate(var(--x,0),var(--y,0));
     transition:transform .08s ease-out,background .08s,border-color .08s,box-shadow .08s;will-change:transform}
   #radialMenu .rm-seg svg{width:24px;height:24px;display:block}
+  /* Hilfe-Button + Popup oben rechts */
+  #helpBtn{position:fixed;top:14px;right:14px;z-index:9998;width:34px;height:34px;border-radius:50%;
+    border:1px solid #3a3f4b;background:#1c1f26;color:#cfe;font:700 18px/1 system-ui,sans-serif;cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  #helpBtn:hover{background:#262b34;border-color:var(--accent)}
+  #helpBox{position:fixed;top:56px;right:14px;z-index:10001;width:min(320px,calc(100vw - 28px));box-sizing:border-box;
+    background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);
+    padding:16px;font-size:14px;line-height:1.55}
+  #helpBox h3{margin:0 0 10px;font-size:16px}
+  #helpBox ul{margin:0 0 12px;padding-left:18px}
+  #helpBox li{margin:0 0 7px}
+  #helpBox kbd{display:inline-block;min-width:14px;text-align:center;padding:1px 6px;border-radius:5px;
+    background:#2c313b;border:1px solid #444b57;border-bottom-width:2px;font:600 12px/1.5 ui-monospace,monospace;color:#eef}
   #radialMenu .rm-seg.active{border-color:rgba(0,224,138,.55)}
   #radialMenu .rm-seg.hot{transform:translate(var(--x),var(--y)) scale(1.28);
     background:var(--accent,#00e08a);border-color:#fff;color:#06231a;box-shadow:0 6px 18px rgba(0,0,0,.5)}
@@ -348,6 +361,20 @@
 <div id="radialMenu" aria-hidden="true">
   <div class="rm-ring"></div>
   <div class="rm-hub"><span class="rm-hublabel"></span></div>
+</div>
+
+<!-- Hilfe / Tastenkürzel: fester Button oben rechts + Popup -->
+<button id="helpBtn" title="Hilfe – Tastenkürzel &amp; Maus">?</button>
+<div id="helpBox" style="display:none">
+  <h3>⌨️ Tastenkürzel &amp; Maus</h3>
+  <ul>
+    <li>🖱️ <b>Rechte Maustaste</b> gedrückt halten → in Richtung eines Werkzeugs ziehen → loslassen wählt aus (Mitte&nbsp;=&nbsp;Abbrechen)</li>
+    <li><b>Werkzeuge:</b> <kbd>S</kbd> Sprühen · <kbd>L</kbd> Linie · <kbd>K</kbd> Kurve · <kbd>N</kbd> Nebeln · <kbd>D</kbd> Dagger · <kbd>V</kbd> Verwischen · <kbd>F</kbd> Füllen · <kbd>O</kbd> Outline · <kbd>3</kbd> 3D-Schatten</li>
+    <li><kbd>E</kbd> Radierer · <kbd>+</kbd>/<kbd>−</kbd> Dicke · <kbd>[</kbd>&nbsp;<kbd>]</kbd> Cap</li>
+    <li><b>Alt</b>+Klick = 💧 Pipette (Farbe unter dem Cursor aufnehmen)</li>
+    <li><kbd>Strg</kbd>+<kbd>Z</kbd> Zurück · <kbd>Strg</kbd>+<kbd>Y</kbd> Vor · <kbd>Esc</kbd> Abbrechen</li>
+  </ul>
+  <button class="act" id="helpClose" style="width:100%;font-size:15px;padding:8px;">Verstanden 👍</button>
 </div>
 
 <!-- Overlays (Popups) müssen VOR dem Script stehen, damit die Bindungen die Elemente finden -->
@@ -2354,6 +2381,16 @@ document.getElementById('battleBtn').addEventListener('click', ()=>renderBattle(
   document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v6','1'); wn.style.display='none'; });
   const openBtn=document.getElementById('whatsNewOpen');
   if(openBtn) openBtn.addEventListener('click', ()=>{ wn.style.display='block'; });   // jederzeit wieder anzeigen
+
+  // Hilfe / Tastenkürzel: Button oben rechts (jederzeit) + einmal automatisch zeigen
+  const hb=document.getElementById('helpBtn'), hbox=document.getElementById('helpBox'), hc=document.getElementById('helpClose');
+  const showHelp=()=>{ if(hbox) hbox.style.display='block'; };
+  const hideHelp=()=>{ if(hbox) hbox.style.display='none'; };
+  if(hb) hb.addEventListener('click', ()=>{ if(hbox) hbox.style.display = hbox.style.display==='none' ? 'block' : 'none'; });
+  if(hc) hc.addEventListener('click', ()=>{ localStorage.setItem('hs_help_v1','1'); hideHelp(); });
+  addEventListener('keydown', e=>{ if(e.key==='Escape') hideHelp(); });
+  // einmal automatisch (aber nicht gleichzeitig mit „Was ist neu")
+  if(!localStorage.getItem('hs_help_v1') && wn.style.display!=='block') showHelp();
 })();
 
 //------------------------------------------------------------------
