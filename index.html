@@ -52,6 +52,26 @@
     linear-gradient(45deg,#9aa2ad 25%,#e9edf2 25%,#e9edf2 75%,#9aa2ad 75%) 5px 5px/10px 10px,#e9edf2}
   .sw.tone-shadow{background:linear-gradient(135deg,#000 0%,#000 45%,#5b5b5b 100%)}
   .sw.tone-light{background:linear-gradient(135deg,#fff 0%,#fff 45%,#c4c4c4 100%)}
+  /* Desktop-Radial (rechte Maustaste) */
+  #radialMenu{position:fixed;left:0;top:0;z-index:9000;pointer-events:none;visibility:hidden;
+    transform:translate(-50%,-50%) scale(.7);opacity:0;transition:transform .12s ease-out,opacity .12s ease-out}
+  #radialMenu.open{visibility:visible;transform:translate(-50%,-50%) scale(1);opacity:1}
+  #radialMenu .rm-ring{position:absolute;left:50%;top:50%;width:250px;height:250px;margin:-125px 0 0 -125px;
+    border-radius:50%;background:radial-gradient(circle at 50% 50%,rgba(22,25,31,.42) 0 28%,rgba(22,25,31,.93) 34% 100%);
+    border:1px solid rgba(255,255,255,.10);box-shadow:0 14px 40px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.04)}
+  #radialMenu .rm-hub{position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;text-align:center;
+    background:rgba(18,21,27,.92);border:1px solid rgba(255,255,255,.12);color:#eef}
+  #radialMenu .rm-hublabel{font:600 13px/1.2 system-ui,sans-serif;padding:0 8px;color:#cfe}
+  #radialMenu.cancel .rm-hublabel{color:#ff8a8a}
+  #radialMenu .rm-seg{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;
+    background:rgba(44,49,59,.96);border:2px solid rgba(255,255,255,.10);color:#fff;
+    transform:translate(var(--x,0),var(--y,0));
+    transition:transform .08s ease-out,background .08s,border-color .08s,box-shadow .08s;will-change:transform}
+  #radialMenu .rm-seg.active{border-color:rgba(0,224,138,.55)}
+  #radialMenu .rm-seg.hot{transform:translate(var(--x),var(--y)) scale(1.28);
+    background:var(--accent,#00e08a);border-color:#fff;color:#06231a;box-shadow:0 6px 18px rgba(0,0,0,.5)}
   .grp>label.dl{text-transform:none;letter-spacing:0;color:var(--txt)}
   #dagGrp input[type=range]{width:88px}
   #angleDial{position:relative;width:46px;height:46px;border-radius:50%;background:#2f3540;
@@ -203,7 +223,7 @@
     </div>
 
     <div class="grp">
-      <label>Druck</label>
+      <label>Dicke</label>
       <input type="range" id="pressure" min="2" max="100" value="55">
       <span class="val" id="pressureVal">55%</span>
     </div>
@@ -212,9 +232,9 @@
       <label>Farbe</label>
       <input type="color" id="color" value="#ff2d55">
       <div class="swatches" id="swatches"></div>
-      <div class="sw eraser" id="eraserSw" title="Radierer – wischt weg. Wirkt mit JEDEM Werkzeug: Linie, Kurve, Bogen, Nebeln … (Druck/Cap regeln Stärke & Breite)"></div>
-      <div class="sw tone-shadow" id="toneShadowSw" title="Schatten – wie eine halbtransparente schwarze Dose: dunkelt den Farbton darunter ab. Je mehr Züge, desto dunkler. Wirkt mit JEDEM Werkzeug (Druck/Cap regeln Breite & Stärke)"></div>
-      <div class="sw tone-light" id="toneLightSw" title="Licht – wie eine halbtransparente weiße Dose: hellt den Farbton darunter auf. Je mehr Züge, desto heller. Wirkt mit JEDEM Werkzeug (Druck/Cap regeln Breite & Stärke)"></div>
+      <div class="sw eraser" id="eraserSw" title="Radierer – wischt weg. Wirkt mit JEDEM Werkzeug: Linie, Kurve, Bogen, Nebeln … (Dicke/Cap regeln Stärke & Breite)"></div>
+      <div class="sw tone-shadow" id="toneShadowSw" title="Schatten – wie eine halbtransparente schwarze Dose: dunkelt den Farbton darunter ab. Je mehr Züge, desto dunkler. Wirkt mit JEDEM Werkzeug (Dicke/Cap regeln Breite & Stärke)"></div>
+      <div class="sw tone-light" id="toneLightSw" title="Licht – wie eine halbtransparente weiße Dose: hellt den Farbton darunter auf. Je mehr Züge, desto heller. Wirkt mit JEDEM Werkzeug (Dicke/Cap regeln Breite & Stärke)"></div>
     </div>
 
     <div class="grp" id="metalGrp">
@@ -312,9 +332,15 @@
   <button id="menuFab" class="fab" title="Menü / Einstellungen">☰</button>
   <button id="colorFab" class="fab" title="Farbe"></button>
   <button id="toolFab" class="fab" title="Werkzeug – halten & ziehen">🎨</button>
-  <div id="pressWrap"><label>Druck</label><input id="pressM" type="range" min="2" max="100" value="55"><span id="pressMVal">55%</span></div>
+  <div id="pressWrap"><label>Dicke</label><input id="pressM" type="range" min="2" max="100" value="55"><span id="pressMVal">55%</span></div>
   <div id="colorRing"></div>
   <div id="toolWheel"></div>
+</div>
+
+<!-- Desktop-Radial (rechte Maustaste): voller Kreis, Auswahl per Richtung -->
+<div id="radialMenu" aria-hidden="true">
+  <div class="rm-ring"></div>
+  <div class="rm-hub"><span class="rm-hublabel"></span></div>
 </div>
 
 <!-- Overlays (Popups) müssen VOR dem Script stehen, damit die Bindungen die Elemente finden -->
@@ -336,11 +362,11 @@
 <div id="whatsNew" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;width:min(300px,calc(100vw - 24px));box-sizing:border-box;background:#1c1f26;color:#fff;border:1px solid #3a3f4b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:16px;font-size:14px;line-height:1.5;">
   <h3 style="margin:0 0 10px;font-size:16px;">🎉 Frisch reingesprüht</h3>
   <ul style="margin:0 0 12px;padding-left:18px;">
-    <li>📦 <b>3D-Schatten</b> — Fläche antippen, Block in eine Richtung herausziehen (Griff), liegt hinter der Farbe</li>
-    <li>⭕ <b>Outline</b> — Farbfläche antippen, präzise Kontur außen herum · 3 Modi: angetippte Fläche · alle einer Farbe · ganzes Bild (Silhouette)</li>
-    <li>🕳️ <b>Käfig mit Aussparungen</b> — Bereiche hinzufügen/abziehen, Rechteck/Ellipse aufziehen, Löcher (Fenster, Waschbecken …) bleiben geschützt</li>
-    <li>🧱 <b>Neue Wände</b> — Toiletten, Planetarium, Backsteinmauer & Schacht (jetzt 17 Motive)</li>
-    <li>🎨 <b>Farbe deckt jetzt voll</b> — solide Deckung als Standard (kein Wand-Durchschein/Sprenkel); für den Realismus-Look „Deckend" abwählen</li>
+    <li>🖱️ <b>Rechte Maustaste = Werkzeug-Rad</b> — halten, in Richtung eines Tools ziehen, loslassen. Mitte = Abbrechen</li>
+    <li>⌨️ <b>Hotkeys</b> — S·L·K·N·D·V·F·O·3 für die Werkzeuge, <b>E</b> Radierer, <b>+/−</b> Dicke, <b>[ ]</b> Cap, <b>Alt+Klick</b> Pipette</li>
+    <li>🌑🌕 <b>Schatten & Licht</b> — halbtransparente Dosen: dunkeln ab bzw. hellen auf, bauen sich über mehrere Züge auf (Dicke = Stärke)</li>
+    <li>📏 <b>„Druck" heißt jetzt „Dicke"</b> — gleicher Regler, klarerer Name</li>
+    <li>📦 <b>3D-Schatten</b> · ⭕ <b>Outline</b> · 🕳️ <b>Käfig mit Aussparungen</b></li>
   </ul>
   <div style="margin:0 0 6px;font-size:12px;opacity:.6;">Außerdem an Bord</div>
   <ul style="margin:0 0 14px;padding-left:18px;font-size:13px;opacity:.85;">
@@ -1264,8 +1290,11 @@ function handlePinch(){
   applyView();
 }
 
+let rmbActive=false;
+preview.addEventListener('contextmenu', e=>e.preventDefault());   // kein Browser-Menü auf der Wand
 preview.addEventListener('pointerdown', e=>{
   if(e.button===1){ e.preventDefault(); panning=true; panLast={x:e.clientX,y:e.clientY}; preview.setPointerCapture(e.pointerId); return; }  // mittlere Taste = Pan, kein Malen
+  if(e.button===2){ e.preventDefault(); preview.setPointerCapture(e.pointerId); rmbActive=true; RadialMenu.openTools(e.clientX,e.clientY); return; }  // rechte Taste = Radial-Menü
   e.preventDefault(); preview.setPointerCapture(e.pointerId);
   activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(activePointers.size>1){                    // zweiter Finger -> Zoom/Pan, evtl. Strich verwerfen
@@ -1274,6 +1303,7 @@ preview.addEventListener('pointerdown', e=>{
     S.pts=[]; drawPreview(); return;
   }
   const p=pos(e); S.cur=p; S.last=p; S.stationary=0;
+  if(e.altKey){ activePointers.delete(e.pointerId); try{preview.releasePointerCapture(e.pointerId);}catch(_){}; eyedrop(p); return; }   // Alt+Klick = Pipette
 
   // Käfig-Polygon zeichnen: Punkte setzen, am Startpunkt schließen (snap)
   if(S.drawMask){
@@ -1322,6 +1352,7 @@ preview.addEventListener('pointerdown', e=>{
   drawPreview(); updateStatus();
 });
 preview.addEventListener('pointermove', e=>{
+  if(rmbActive){ RadialMenu.move(e.clientX,e.clientY); return; }            // Radial-Menü: Richtung wählen
   if(activePointers.has(e.pointerId)) activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(gestureActive){ if(activePointers.size>=2) handlePinch(); return; }   // Zoom/Pan
   const p=pos(e);
@@ -1349,6 +1380,8 @@ preview.addEventListener('pointermove', e=>{
   else if(S.tool==='line'||S.tool==='curve') drawPreview();
 });
 function endStroke(e){
+  if(rmbActive){ rmbActive=false; if(e && e.type==='pointercancel') RadialMenu.cancel(); else RadialMenu.commit();
+    try{ if(e) preview.releasePointerCapture(e.pointerId); }catch(_){}; return; }
   if(e && activePointers.has(e.pointerId)) activePointers.delete(e.pointerId);
   if(activePointers.size<2){ gestureActive=false; gLastMid=null; }
   if(S.shadowDrag){ S.shadowDrag=null; return; }
@@ -1731,19 +1764,98 @@ document.addEventListener('fullscreenchange',()=>{
   fitStage();
 });
 
+//------------------------------------------------------------------
+// Desktop-Radial (rechte Maustaste): voller Kreis, Auswahl per Richtung
+//------------------------------------------------------------------
+const RadialMenu=(function(){
+  const host=document.getElementById('radialMenu');
+  const hubLbl=host.querySelector('.rm-hublabel');
+  const R=96, DEAD=30;                 // Ring-Radius / Totzone in der Mitte (Abbruch)
+  let open=false, items=[], cx=0, cy=0, hot=-1, segEls=[];
+  function toolItems(){
+    const arr=Object.keys(TOOL_EMOJI).map(t=>({emoji:TOOL_EMOJI[t], label:TOOL_LABEL[t], act:()=>selectTool(t), active:()=>S.tool===t}));
+    arr.push({emoji:'↶', label:'Zurück', act:()=>undo()});
+    arr.push({emoji:'↷', label:'Vor',    act:()=>redo()});
+    return arr;
+  }
+  function build(its){
+    items=its; segEls.forEach(el=>el.remove()); segEls=[];
+    const N=items.length, step=TAU/N;
+    items.forEach((it,i)=>{
+      const th=-Math.PI/2 + i*step;                       // Start oben, im Uhrzeigersinn
+      const el=document.createElement('div');
+      el.className='rm-seg'+(it.active&&it.active()?' active':'');
+      el.textContent=it.emoji;
+      el.style.setProperty('--x',(Math.cos(th)*R).toFixed(1)+'px');
+      el.style.setProperty('--y',(Math.sin(th)*R).toFixed(1)+'px');
+      host.appendChild(el); segEls.push(el);
+    });
+  }
+  function setHot(i){
+    if(i===hot) return;
+    hot=i; segEls.forEach((el,k)=>el.classList.toggle('hot', k===i));
+    host.classList.toggle('cancel', i<0);
+    hubLbl.textContent = i<0 ? 'Abbrechen' : items[i].label;
+  }
+  function openTools(x,y){
+    build(toolItems());
+    const m=130; cx=clamp(x,m,innerWidth-m); cy=clamp(y,m,innerHeight-m);
+    host.style.left=cx+'px'; host.style.top=cy+'px';
+    hot=-2; setHot(-1);                                   // -2 erzwingt initiales setHot(-1)
+    open=true; host.classList.add('open'); host.setAttribute('aria-hidden','false');
+  }
+  function move(x,y){
+    if(!open) return;
+    const dx=x-cx, dy=y-cy;
+    if(Math.hypot(dx,dy)<DEAD){ setHot(-1); return; }
+    const N=items.length, step=TAU/N;
+    let a=Math.atan2(dy,dx)+Math.PI/2; a=((a%TAU)+TAU)%TAU;   // 0 = oben, im Uhrzeigersinn
+    setHot(Math.round(a/step)%N);
+  }
+  function close(){ if(!open) return; open=false; host.classList.remove('open','cancel'); host.setAttribute('aria-hidden','true'); }
+  function commit(){ const pick = hot>=0 ? items[hot] : null; close(); if(pick && pick.act) pick.act(); }
+  function cancel(){ close(); }
+  return {openTools, move, commit, cancel, close, isOpen:()=>open};
+})();
+
+// --- Hotkey-Helfer ---
+function nudgeDicke(d){ const v=clamp(Math.round(S.pressure*100)+d,2,100); setPressure(v); updateStatus(); drawPreview(); }
+function nudgeCap(dir){ const keys=Object.keys(CAPS), i=clamp(keys.indexOf(S.cap)+dir,0,keys.length-1);
+  S.cap=keys[i]; const cs=document.getElementById('cap'); if(cs) cs.value=S.cap; updateStatus(); drawPreview(); }
+function eyedrop(p){
+  const x=clamp(Math.round(p.x),0,W-1), y=clamp(Math.round(p.y),0,H-1);
+  let d=px.getImageData(x,y,1,1).data;
+  if(d[3]<8) d=bgx.getImageData(x,y,1,1).data;            // nichts gemalt -> Wandfarbe aufnehmen
+  const hex='#'+[d[0],d[1],d[2]].map(n=>n.toString(16).padStart(2,'0')).join('');
+  S.erase=false; S.tone=null; S.color=hex; clearMetal();
+  const ci=document.getElementById('color'); if(ci) ci.value=hex;
+  addToPalette(hex); markSwatch(); updateColorFab(); updateStatus();
+}
+
 addEventListener('keydown',e=>{
   if(e.key==='Enter' && S.shadowSess){ e.preventDefault(); commitShadow(); return; }
-  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); }
-  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){ e.preventDefault(); redo(); }
-  if(e.key==='Escape'){ if(S.shadowSess) cancelShadow(); if(S.drawMask) cancelDrawMask();
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); return; }
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){ e.preventDefault(); redo(); return; }
+  if(e.key==='Escape'){ RadialMenu.cancel(); if(S.shadowSess) cancelShadow(); if(S.drawMask) cancelDrawMask();
     if(S.boxDraw){ S.boxDraw=false; S.boxStart=null; const bb=document.getElementById('boxBtn'); bb.classList.remove('active'); bb.title='Rechteck/Ellipse aufziehen'; }
-    S.pts=[]; drawPreview(); }
+    S.pts=[]; drawPreview(); return; }
+  // --- Hotkeys: nur ohne Modifier & nicht beim Tippen in Feldern ---
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  if(e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  const TOOLKEYS={s:'spray', l:'line', k:'curve', n:'fog', d:'dagger', v:'smudge', f:'fill', o:'outline', '3':'shadow'};
+  const kk=e.key.toLowerCase();
+  if(TOOLKEYS[kk]){ e.preventDefault(); selectTool(TOOLKEYS[kk]); return; }
+  if(kk==='e'){ e.preventDefault(); setErase(!S.erase); return; }
+  if(e.key==='+'||e.key==='='){ e.preventDefault(); nudgeDicke(+5); return; }
+  if(e.key==='-'||e.key==='_'){ e.preventDefault(); nudgeDicke(-5); return; }
+  if(e.key==='['){ e.preventDefault(); nudgeCap(-1); return; }
+  if(e.key===']'){ e.preventDefault(); nudgeCap(+1); return; }
 });
 
 function updateStatus(){
   const hints={
-    spray:'Gedrückt halten & ziehen · Druck regelt stufenlos Nebel → fast solide Linie',
-    fog:'Nebeln: gedrückt halten & ziehen · weicher Dunst ohne Kern · langsam aufbauen (mehrfach drüber/halten) · Druck & Cap regeln Breite',
+    spray:'Gedrückt halten & ziehen · Dicke regelt stufenlos Nebel → fast solide Linie',
+    fog:'Nebeln: gedrückt halten & ziehen · weicher Dunst ohne Kern · langsam aufbauen (mehrfach drüber/halten) · Dicke & Cap regeln Breite',
     line:'Klick = Startpunkt, zweiter Klick = Linie',
     curve:'Klick Start · Klick Ende · Klick für Biegung',
     dagger: ({
@@ -1772,7 +1884,7 @@ function updateStatus(){
   const toneTag = S.tone==='shadow' ? '<b>🌑 Schatten</b> · ' : S.tone==='light' ? '<b>🌕 Licht</b> · ' : '';
   document.getElementById('status').innerHTML =
     eraseTag + toneTag + metalTag +
-    `<b>${CAPS[S.cap].label}</b> · Druck ${Math.round(S.pressure*100)}% · ${hints[S.tool]} · `+
+    `<b>${CAPS[S.cap].label}</b> · Dicke ${Math.round(S.pressure*100)}% · ${hints[S.tool]} · `+
     `<kbd>Strg</kbd>+<kbd>Z</kbd> Zurück`;
 }
 
@@ -2223,8 +2335,8 @@ document.getElementById('battleBtn').addEventListener('click', ()=>renderBattle(
 // „Was ist neu"-Popup – einmal pro Gerät (Version hochzählen für neue Feature-Runden)
 (function(){
   const wn=document.getElementById('whatsNew'); if(!wn) return;
-  if(!localStorage.getItem('hs_whatsnew_v5')) wn.style.display='block';
-  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v5','1'); wn.style.display='none'; });
+  if(!localStorage.getItem('hs_whatsnew_v6')) wn.style.display='block';
+  document.getElementById('whatsNewBtn').addEventListener('click', ()=>{ localStorage.setItem('hs_whatsnew_v6','1'); wn.style.display='none'; });
   const openBtn=document.getElementById('whatsNewOpen');
   if(openBtn) openBtn.addEventListener('click', ()=>{ wn.style.display='block'; });   // jederzeit wieder anzeigen
 })();
